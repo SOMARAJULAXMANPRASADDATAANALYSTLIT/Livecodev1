@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Editor from "@monaco-editor/react";
-import { Play, Bug, Sparkles, ChevronRight } from "lucide-react";
+import { Play, Bug, Sparkles, ChevronRight, Wand2, Split, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -15,6 +15,10 @@ const LANGUAGES = [
   { value: "cpp", label: "C++" },
   { value: "go", label: "Go" },
   { value: "rust", label: "Rust" },
+  { value: "sql", label: "SQL" },
+  { value: "typescript", label: "TypeScript" },
+  { value: "csharp", label: "C#" },
+  { value: "php", label: "PHP" },
 ];
 
 const DEFAULT_CODE = `# Welcome to Live Code Mentor!
@@ -39,6 +43,14 @@ const CodeLearningView = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedBug, setSelectedBug] = useState(null);
   const [showTeaching, setShowTeaching] = useState(false);
+  
+  // AI Senior / Split View states
+  const [fixedCode, setFixedCode] = useState("");
+  const [fixExplanation, setFixExplanation] = useState("");
+  const [changesMade, setChangesMade] = useState([]);
+  const [isFixing, setIsFixing] = useState(false);
+  const [showSplitView, setShowSplitView] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const analyzeCode = async () => {
     if (!code.trim()) {
@@ -49,6 +61,8 @@ const CodeLearningView = () => {
     setIsAnalyzing(true);
     setBugs([]);
     setOverallQuality(null);
+    setFixedCode("");
+    setShowSplitView(false);
 
     try {
       const response = await fetch(`${BACKEND_URL}/api/analyze-code`, {
@@ -73,6 +87,57 @@ const CodeLearningView = () => {
       toast.error("Failed to analyze code. Please try again.");
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const letAISeniorFix = async () => {
+    if (!code.trim()) {
+      toast.error("Please enter some code first");
+      return;
+    }
+
+    setIsFixing(true);
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/fix-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, language, bugs }),
+      });
+
+      if (!response.ok) throw new Error("Fix failed");
+
+      const data = await response.json();
+      setFixedCode(data.fixed_code);
+      setFixExplanation(data.explanation);
+      setChangesMade(data.changes_made || []);
+      setShowSplitView(true);
+      toast.success("AI Senior has fixed your code!");
+    } catch (error) {
+      console.error("Fix error:", error);
+      toast.error("Failed to fix code. Please try again.");
+    } finally {
+      setIsFixing(false);
+    }
+  };
+
+  const applyFix = () => {
+    if (fixedCode) {
+      setCode(fixedCode);
+      setShowSplitView(false);
+      setFixedCode("");
+      setBugs([]);
+      setOverallQuality("good");
+      toast.success("Fixed code applied!");
+    }
+  };
+
+  const copyFixedCode = async () => {
+    if (fixedCode) {
+      await navigator.clipboard.writeText(fixedCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      toast.success("Code copied to clipboard!");
     }
   };
 
@@ -101,10 +166,10 @@ const CodeLearningView = () => {
 
   return (
     <div data-testid="code-learning-view" className="h-full">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+      <div className={`grid gap-6 h-full ${showSplitView ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-2'}`}>
         {/* Editor Panel */}
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <Select value={language} onValueChange={setLanguage}>
               <SelectTrigger 
                 data-testid="language-select"
@@ -121,116 +186,255 @@ const CodeLearningView = () => {
               </SelectContent>
             </Select>
 
-            <Button
-              data-testid="analyze-code-btn"
-              onClick={analyzeCode}
-              disabled={isAnalyzing}
-              className="btn-primary gap-2"
-            >
-              {isAnalyzing ? (
-                <>
-                  <span className="loading-dots">
-                    <span className="inline-block w-1 h-1 bg-white rounded-full mx-0.5"></span>
-                    <span className="inline-block w-1 h-1 bg-white rounded-full mx-0.5"></span>
-                    <span className="inline-block w-1 h-1 bg-white rounded-full mx-0.5"></span>
-                  </span>
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  Analyze My Code
-                </>
-              )}
-            </Button>
-          </div>
-
-          <div 
-            data-testid="code-editor-container"
-            className="monaco-container flex-1 min-h-[400px] lg:min-h-[500px] editor-glow rounded-2xl"
-          >
-            <Editor
-              height="100%"
-              language={language}
-              value={code}
-              onChange={(value) => setCode(value || "")}
-              theme="vs-dark"
-              options={{
-                fontSize: 14,
-                fontFamily: "'JetBrains Mono', monospace",
-                minimap: { enabled: false },
-                padding: { top: 16, bottom: 16 },
-                scrollBeyondLastLine: false,
-                smoothScrolling: true,
-                cursorBlinking: "smooth",
-                lineNumbers: "on",
-                renderLineHighlight: "all",
-                bracketPairColorization: { enabled: true },
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Results Panel */}
-        <div 
-          data-testid="analysis-results-panel"
-          className="glass-heavy rounded-2xl p-6 flex flex-col"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <Bug className="w-5 h-5 text-[#667eea]" />
-              Analysis Results
-            </h2>
-            {overallQuality && (
-              <span data-testid="quality-badge" className={`text-sm font-medium ${getQualityColor(overallQuality)}`}>
-                Quality: {overallQuality.charAt(0).toUpperCase() + overallQuality.slice(1)}
-              </span>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {bugs.length === 0 ? (
-              <div 
-                data-testid="no-bugs-message"
-                className="h-full flex flex-col items-center justify-center text-center text-white/50"
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                data-testid="analyze-code-btn"
+                onClick={analyzeCode}
+                disabled={isAnalyzing}
+                className="btn-primary gap-2"
               >
-                <Sparkles className="w-12 h-12 mb-4 text-[#667eea]/50" />
-                <p className="text-lg font-medium mb-2">No issues found yet</p>
-                <p className="text-sm">Paste your code and click "Analyze My Code" to get started</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {bugs.map((bug, index) => (
-                  <div
-                    key={index}
-                    data-testid={`bug-item-${index}`}
-                    className="bug-item glass-light rounded-xl p-4 cursor-pointer"
-                    onClick={() => handleTeachMe(bug)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={getSeverityBadge(bug.severity)}>
-                            {bug.severity}
-                          </span>
-                          <span className="text-xs text-white/40">Line {bug.line}</span>
-                        </div>
-                        <p className="text-sm text-white/80 mb-2">{bug.message}</p>
-                        <p className="text-xs text-white/50">{bug.suggestion}</p>
-                      </div>
-                      <button
-                        data-testid={`teach-me-btn-${index}`}
-                        className="flex items-center gap-1 text-[#667eea] text-sm font-medium hover:underline shrink-0"
-                      >
-                        Teach Me <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                {isAnalyzing ? (
+                  <>
+                    <span className="loading-dots">
+                      <span className="inline-block w-1 h-1 bg-white rounded-full mx-0.5"></span>
+                      <span className="inline-block w-1 h-1 bg-white rounded-full mx-0.5"></span>
+                      <span className="inline-block w-1 h-1 bg-white rounded-full mx-0.5"></span>
+                    </span>
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4" />
+                    Analyze My Code
+                  </>
+                )}
+              </Button>
+
+              <Button
+                data-testid="ai-senior-fix-btn"
+                onClick={letAISeniorFix}
+                disabled={isFixing || isAnalyzing}
+                className="btn-secondary gap-2 border-[#34A853] text-[#34A853] hover:bg-[#34A853]/10"
+              >
+                {isFixing ? (
+                  <>
+                    <span className="loading-dots">
+                      <span className="inline-block w-1 h-1 bg-[#34A853] rounded-full mx-0.5"></span>
+                      <span className="inline-block w-1 h-1 bg-[#34A853] rounded-full mx-0.5"></span>
+                      <span className="inline-block w-1 h-1 bg-[#34A853] rounded-full mx-0.5"></span>
+                    </span>
+                    Fixing...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 className="w-4 h-4" />
+                    AI Senior Fix
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
+
+          {/* Split View: Original + Fixed Code */}
+          {showSplitView ? (
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[400px]">
+              {/* Original Code */}
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2 mb-2 px-2">
+                  <div className="w-3 h-3 rounded-full bg-[#EA4335]"></div>
+                  <span className="text-sm font-medium text-white/70">Your Code (with bugs)</span>
+                </div>
+                <div className="monaco-container flex-1 rounded-2xl border-[#EA4335]/30">
+                  <Editor
+                    height="100%"
+                    language={language}
+                    value={code}
+                    onChange={(value) => setCode(value || "")}
+                    theme="vs-dark"
+                    options={{
+                      fontSize: 13,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      minimap: { enabled: false },
+                      padding: { top: 12, bottom: 12 },
+                      scrollBeyondLastLine: false,
+                      readOnly: false,
+                      lineNumbers: "on",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Fixed Code */}
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between mb-2 px-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-[#34A853]"></div>
+                    <span className="text-sm font-medium text-white/70">AI Senior's Fix (error-free)</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      data-testid="copy-fixed-code-btn"
+                      onClick={copyFixedCode}
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                    >
+                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    </Button>
+                    <Button
+                      data-testid="apply-fix-btn"
+                      onClick={applyFix}
+                      size="sm"
+                      className="h-7 px-3 text-xs bg-[#34A853] hover:bg-[#2d8f47]"
+                    >
+                      Apply Fix
+                    </Button>
+                  </div>
+                </div>
+                <div className="monaco-container flex-1 rounded-2xl border-[#34A853]/30">
+                  <Editor
+                    height="100%"
+                    language={language}
+                    value={fixedCode}
+                    theme="vs-dark"
+                    options={{
+                      fontSize: 13,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      minimap: { enabled: false },
+                      padding: { top: 12, bottom: 12 },
+                      scrollBeyondLastLine: false,
+                      readOnly: true,
+                      lineNumbers: "on",
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div 
+              data-testid="code-editor-container"
+              className="monaco-container flex-1 min-h-[400px] lg:min-h-[500px] editor-glow rounded-2xl"
+            >
+              <Editor
+                height="100%"
+                language={language}
+                value={code}
+                onChange={(value) => setCode(value || "")}
+                theme="vs-dark"
+                options={{
+                  fontSize: 14,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  minimap: { enabled: false },
+                  padding: { top: 16, bottom: 16 },
+                  scrollBeyondLastLine: false,
+                  smoothScrolling: true,
+                  cursorBlinking: "smooth",
+                  lineNumbers: "on",
+                  renderLineHighlight: "all",
+                  bracketPairColorization: { enabled: true },
+                }}
+              />
+            </div>
+          )}
+
+          {/* Fix Explanation */}
+          {showSplitView && fixExplanation && (
+            <div className="glass-light rounded-xl p-4 animate-slideUp">
+              <h3 className="font-semibold text-[#34A853] mb-2 flex items-center gap-2">
+                <Wand2 className="w-4 h-4" />
+                What AI Senior Fixed:
+              </h3>
+              <p className="text-white/80 text-sm mb-3">{fixExplanation}</p>
+              {changesMade.length > 0 && (
+                <ul className="space-y-1">
+                  {changesMade.map((change, i) => (
+                    <li key={i} className="text-xs text-white/60 flex items-start gap-2">
+                      <span className="text-[#34A853]">✓</span>
+                      {change}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Results Panel - Hidden in split view */}
+        {!showSplitView && (
+          <div 
+            data-testid="analysis-results-panel"
+            className="glass-heavy rounded-2xl p-6 flex flex-col"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Bug className="w-5 h-5 text-[#667eea]" />
+                Analysis Results
+              </h2>
+              {overallQuality && (
+                <span data-testid="quality-badge" className={`text-sm font-medium ${getQualityColor(overallQuality)}`}>
+                  Quality: {overallQuality.charAt(0).toUpperCase() + overallQuality.slice(1)}
+                </span>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {bugs.length === 0 ? (
+                <div 
+                  data-testid="no-bugs-message"
+                  className="h-full flex flex-col items-center justify-center text-center text-white/50"
+                >
+                  <Sparkles className="w-12 h-12 mb-4 text-[#667eea]/50" />
+                  <p className="text-lg font-medium mb-2">No issues found yet</p>
+                  <p className="text-sm">Paste your code and click "Analyze My Code" to get started</p>
+                  <p className="text-xs mt-4 text-white/30">Or click "AI Senior Fix" to auto-fix any issues</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {bugs.map((bug, index) => (
+                    <div
+                      key={index}
+                      data-testid={`bug-item-${index}`}
+                      className="bug-item glass-light rounded-xl p-4 cursor-pointer"
+                      onClick={() => handleTeachMe(bug)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className={getSeverityBadge(bug.severity)}>
+                              {bug.severity}
+                            </span>
+                            <span className="text-xs text-white/40">Line {bug.line}</span>
+                          </div>
+                          <p className="text-sm text-white/80 mb-2">{bug.message}</p>
+                          <p className="text-xs text-white/50">{bug.suggestion}</p>
+                        </div>
+                        <button
+                          data-testid={`teach-me-btn-${index}`}
+                          className="flex items-center gap-1 text-[#667eea] text-sm font-medium hover:underline shrink-0"
+                        >
+                          Teach Me <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Quick Fix Button */}
+                  <div className="pt-4 border-t border-white/10">
+                    <Button
+                      data-testid="quick-fix-all-btn"
+                      onClick={letAISeniorFix}
+                      disabled={isFixing}
+                      className="w-full btn-secondary border-[#34A853] text-[#34A853] hover:bg-[#34A853]/10 gap-2"
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      Fix All Issues with AI Senior
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Teaching Overlay */}
