@@ -113,6 +113,16 @@ class ImageAnalysisResponse(BaseModel):
     analysis: str
     task_type: str
 
+class FixCodeRequest(BaseModel):
+    code: str
+    language: str
+    bugs: List[dict] = []
+
+class FixCodeResponse(BaseModel):
+    fixed_code: str
+    explanation: str
+    changes_made: List[str]
+
 # ============== HELPER FUNCTIONS ==============
 
 def get_chat_instance(system_message: str, session_id: str = None):
@@ -399,6 +409,50 @@ async def english_chat(request: EnglishChatRequest):
             
     except Exception as e:
         logger.error(f"English chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/fix-code", response_model=FixCodeResponse)
+async def fix_code(request: FixCodeRequest):
+    """AI Senior fixes the code automatically"""
+    try:
+        bugs_context = ""
+        if request.bugs:
+            bugs_context = "Known bugs to fix:\n" + "\n".join([f"- Line {b.get('line', '?')}: {b.get('message', '')}" for b in request.bugs])
+        
+        system_prompt = """You are a senior software engineer. Your job is to fix ALL bugs in the code and return clean, working code.
+
+RESPOND ONLY WITH VALID JSON:
+{
+    "fixed_code": "The complete fixed code (properly formatted, ready to run)",
+    "explanation": "Brief explanation of what was fixed",
+    "changes_made": ["Change 1", "Change 2", "Change 3"]
+}
+
+RULES:
+1. Fix ALL bugs - division by zero, null checks, async/await issues, etc.
+2. Keep the code structure similar but correct
+3. Add necessary error handling
+4. The fixed_code must be complete and runnable
+5. Preserve comments but fix the issues they mention"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Fix this {request.language} code:\n\n```{request.language}\n{request.code}\n```\n\n{bugs_context}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "fixed_code": request.code,
+            "explanation": "Unable to generate fix",
+            "changes_made": []
+        })
+        
+        return FixCodeResponse(
+            fixed_code=data.get("fixed_code", request.code),
+            explanation=data.get("explanation", "Code has been reviewed"),
+            changes_made=data.get("changes_made", [])
+        )
+        
+    except Exception as e:
+        logger.error(f"Fix code error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/analyze-image", response_model=ImageAnalysisResponse)
