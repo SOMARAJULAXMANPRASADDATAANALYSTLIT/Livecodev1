@@ -14,7 +14,7 @@ from io import BytesIO
 from PIL import Image
 
 class LiveCodeMentorTester:
-    def __init__(self, base_url="https://aimentor-29.preview.emergentagent.com"):
+    def __init__(self, base_url="https://code-glimpse-15.preview.emergentagent.com"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0
