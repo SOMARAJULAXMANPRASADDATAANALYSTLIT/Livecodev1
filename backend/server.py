@@ -4,6 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import json
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -125,6 +126,30 @@ def get_chat_instance(system_message: str, session_id: str = None):
     ).with_model("gemini", "gemini-3-flash-preview")
     return chat
 
+def safe_parse_json(response: str, default: dict = None) -> dict:
+    """Safely parse JSON from AI response"""
+    if default is None:
+        default = {}
+    
+    if not response:
+        return default
+    
+    try:
+        clean_response = response.strip()
+        # Remove markdown code blocks if present
+        if clean_response.startswith("```"):
+            lines = clean_response.split("\n")
+            # Remove first line (```json or ```)
+            lines = lines[1:]
+            # Remove last line if it's ```
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            clean_response = "\n".join(lines)
+        
+        return json.loads(clean_response)
+    except (json.JSONDecodeError, AttributeError):
+        return default
+
 # ============== API ENDPOINTS ==============
 
 @api_router.get("/health")
@@ -155,23 +180,13 @@ async def analyze_code(request: CodeAnalysisRequest):
         user_msg = UserMessage(text=f"Analyze this {request.language} code:\n\n```{request.language}\n{request.code}\n```")
         response = await chat.send_message(user_msg)
         
-        # Parse JSON response
-        import json
-        try:
-            # Clean response if wrapped in markdown
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                clean_response = clean_response.split("\n", 1)[1]
-                clean_response = clean_response.rsplit("```", 1)[0]
-            
-            data = json.loads(clean_response)
-            return CodeAnalysisResponse(
-                bugs=[Bug(**b) for b in data.get("bugs", [])],
-                overall_quality=data.get("overall_quality", "fair")
-            )
-        except json.JSONDecodeError:
-            # Fallback if AI doesn't return proper JSON
-            return CodeAnalysisResponse(bugs=[], overall_quality="good")
+        # Parse JSON response with safe handler
+        data = safe_parse_json(response, {"bugs": [], "overall_quality": "fair"})
+        
+        return CodeAnalysisResponse(
+            bugs=[Bug(**b) for b in data.get("bugs", [])],
+            overall_quality=data.get("overall_quality", "fair")
+        )
             
     except Exception as e:
         logger.error(f"Code analysis error: {e}")
@@ -201,21 +216,19 @@ async def generate_teaching(request: TeachingRequest):
         user_msg = UserMessage(text=f"Explain this bug to a student:\n\nCode:\n```\n{request.code}\n```\n\nBug at line {request.bug.get('line', '?')}: {request.bug.get('message', 'Unknown issue')}")
         response = await chat.send_message(user_msg)
         
-        import json
-        try:
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                clean_response = clean_response.split("\n", 1)[1]
-                clean_response = clean_response.rsplit("```", 1)[0]
-            data = json.loads(clean_response)
-            return TeachingResponse(**data)
-        except json.JSONDecodeError:
-            return TeachingResponse(
-                conceptName="Code Issue",
-                naturalExplanation=response,
-                whyItMatters="Understanding this helps write better code.",
-                commonMistake="This is a common pattern that trips up many developers."
-            )
+        data = safe_parse_json(response, {
+            "conceptName": "Code Issue",
+            "naturalExplanation": response or "Let me explain this issue...",
+            "whyItMatters": "Understanding this helps write better code.",
+            "commonMistake": "This is a common pattern that trips up many developers."
+        })
+        
+        return TeachingResponse(
+            conceptName=data.get("conceptName", "Code Issue"),
+            naturalExplanation=data.get("naturalExplanation", "Let me explain..."),
+            whyItMatters=data.get("whyItMatters", "This is important for writing robust code."),
+            commonMistake=data.get("commonMistake", "Many developers encounter this.")
+        )
             
     except Exception as e:
         logger.error(f"Teaching generation error: {e}")
@@ -238,20 +251,17 @@ async def generate_deeper_explanation(request: DeeperExplanationRequest):
         user_msg = UserMessage(text=f"Provide a deeper explanation for: {request.conceptName}\n\nCurrent explanation: {request.currentExplanation}")
         response = await chat.send_message(user_msg)
         
-        import json
-        try:
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                clean_response = clean_response.split("\n", 1)[1]
-                clean_response = clean_response.rsplit("```", 1)[0]
-            data = json.loads(clean_response)
-            return DeeperExplanationResponse(**data)
-        except json.JSONDecodeError:
-            return DeeperExplanationResponse(
-                deeperExplanation=response,
-                codeExamples=[],
-                relatedConcepts=[]
-            )
+        data = safe_parse_json(response, {
+            "deeperExplanation": response or "Here's a deeper look...",
+            "codeExamples": [],
+            "relatedConcepts": []
+        })
+        
+        return DeeperExplanationResponse(
+            deeperExplanation=data.get("deeperExplanation", "Here's more detail..."),
+            codeExamples=data.get("codeExamples", []),
+            relatedConcepts=data.get("relatedConcepts", [])
+        )
             
     except Exception as e:
         logger.error(f"Deeper explanation error: {e}")
@@ -285,7 +295,7 @@ async def generate_visual_diagram(request: VisualDiagramRequest):
         response = await chat.send_message(user_msg)
         
         # Extract SVG from response
-        svg_content = response.strip()
+        svg_content = response.strip() if response else ""
         if "<svg" in svg_content:
             start = svg_content.find("<svg")
             end = svg_content.rfind("</svg>") + 6
@@ -322,20 +332,17 @@ async def evaluate_answer(request: EvaluateAnswerRequest):
         user_msg = UserMessage(text=f"Question: {request.question}\n\nCorrect concept: {request.correctConcept}\n\nStudent's answer: {request.studentAnswer}\n\nDid they understand?")
         response = await chat.send_message(user_msg)
         
-        import json
-        try:
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                clean_response = clean_response.split("\n", 1)[1]
-                clean_response = clean_response.rsplit("```", 1)[0]
-            data = json.loads(clean_response)
-            return EvaluateAnswerResponse(**data)
-        except json.JSONDecodeError:
-            return EvaluateAnswerResponse(
-                understood=True,
-                feedback="Good effort!",
-                encouragement="Keep learning!"
-            )
+        data = safe_parse_json(response, {
+            "understood": True,
+            "feedback": "Good effort!",
+            "encouragement": "Keep learning!"
+        })
+        
+        return EvaluateAnswerResponse(
+            understood=data.get("understood", True),
+            feedback=data.get("feedback", "Good effort!"),
+            encouragement=data.get("encouragement", "Keep learning!")
+        )
             
     except Exception as e:
         logger.error(f"Answer evaluation error: {e}")
@@ -373,24 +380,17 @@ async def english_chat(request: EnglishChatRequest):
         user_msg = UserMessage(text=f"Conversation history:\n{context}\n\nUser's new message: {request.message}")
         response = await chat.send_message(user_msg)
         
-        import json
-        try:
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                clean_response = clean_response.split("\n", 1)[1]
-                clean_response = clean_response.rsplit("```", 1)[0]
-            data = json.loads(clean_response)
-            return EnglishChatResponse(
-                response=data.get("response", response),
-                intent=data.get("intent", "conversation"),
-                corrections=[Correction(**c) for c in data.get("corrections", [])]
-            )
-        except json.JSONDecodeError:
-            return EnglishChatResponse(
-                response=response,
-                intent="conversation",
-                corrections=[]
-            )
+        data = safe_parse_json(response, {
+            "response": response or "I'm here to help you learn English!",
+            "intent": "conversation",
+            "corrections": []
+        })
+        
+        return EnglishChatResponse(
+            response=data.get("response", "I'm here to help!"),
+            intent=data.get("intent", "conversation"),
+            corrections=[Correction(**c) for c in data.get("corrections", [])]
+        )
             
     except Exception as e:
         logger.error(f"English chat error: {e}")
@@ -426,7 +426,7 @@ async def analyze_image(request: ImageAnalysisRequest):
         response = await chat.send_message(user_msg)
         
         return ImageAnalysisResponse(
-            analysis=response,
+            analysis=response or "Unable to analyze the image. Please try again.",
             task_type=request.task_type
         )
         
