@@ -3,45 +3,98 @@ import ReactDOM from "react-dom/client";
 import "@/index.css";
 import App from "@/App";
 
-// Suppress PostHog analytics errors (external script, not part of our app)
-const originalError = console.error;
-console.error = (...args) => {
-  const errorString = args[0]?.toString?.() || '';
+// ============================================
+// Suppress PostHog analytics errors completely
+// These are from external Emergent platform scripts
+// ============================================
+
+// Suppress console errors from PostHog
+const originalConsoleError = console.error;
+console.error = function(...args) {
+  const msg = args[0]?.toString?.() || '';
   if (
-    errorString.includes('posthog') ||
-    errorString.includes('PerformanceServerTiming') ||
-    errorString.includes('DataCloneError')
+    msg.includes('posthog') ||
+    msg.includes('PerformanceServerTiming') ||
+    msg.includes('DataCloneError') ||
+    msg.includes('postMessage')
   ) {
-    return; // Suppress PostHog-related errors
+    return;
   }
-  originalError.apply(console, args);
+  originalConsoleError.apply(console, args);
 };
 
-// Global error handler for uncaught errors from third-party scripts
-window.addEventListener('error', (event) => {
+// Suppress window errors
+window.onerror = function(message, source, lineno, colno, error) {
   if (
-    event.message?.includes('PerformanceServerTiming') ||
-    event.message?.includes('DataCloneError') ||
-    event.filename?.includes('posthog')
+    message?.includes?.('PerformanceServerTiming') ||
+    message?.includes?.('DataCloneError') ||
+    source?.includes?.('posthog')
   ) {
-    event.preventDefault();
-    event.stopPropagation();
-    return false;
+    return true; // Prevents the error from showing
   }
-});
+  return false;
+};
 
-// Handle unhandled promise rejections from third-party scripts
-window.addEventListener('unhandledrejection', (event) => {
-  const reason = event.reason?.toString?.() || '';
+// Suppress unhandled promise rejections
+window.onunhandledrejection = function(event) {
+  const reason = event.reason?.toString?.() || event.reason?.message || '';
   if (
     reason.includes('PerformanceServerTiming') ||
     reason.includes('DataCloneError') ||
     reason.includes('posthog')
   ) {
     event.preventDefault();
-    return false;
+    return;
   }
+};
+
+// Remove error overlay elements if they appear
+const removePostHogErrorOverlay = () => {
+  const overlays = document.querySelectorAll('iframe[id*="webpack-dev-server"]');
+  overlays.forEach(el => {
+    if (el.contentDocument?.body?.textContent?.includes('posthog') ||
+        el.contentDocument?.body?.textContent?.includes('PerformanceServerTiming')) {
+      el.remove();
+    }
+  });
+  
+  // Also check for React error overlay
+  const reactOverlay = document.getElementById('webpack-dev-server-client-overlay');
+  if (reactOverlay) {
+    const content = reactOverlay.shadowRoot?.textContent || reactOverlay.textContent || '';
+    if (content.includes('posthog') || content.includes('PerformanceServerTiming')) {
+      reactOverlay.remove();
+    }
+  }
+};
+
+// Run periodically to catch any overlays
+setInterval(removePostHogErrorOverlay, 500);
+
+// Also use MutationObserver to catch overlays immediately
+const observer = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    mutation.addedNodes.forEach((node) => {
+      if (node.nodeType === 1) {
+        const el = node;
+        if (el.id?.includes('webpack-dev-server') || 
+            el.tagName === 'IFRAME' ||
+            el.className?.includes?.('error-overlay')) {
+          setTimeout(removePostHogErrorOverlay, 100);
+        }
+      }
+    });
+  });
 });
+
+observer.observe(document.body || document.documentElement, {
+  childList: true,
+  subtree: true
+});
+
+// ============================================
+// Render App
+// ============================================
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
