@@ -160,24 +160,29 @@ async def health_check():
 async def analyze_code(request: CodeAnalysisRequest):
     """Analyze code for bugs and issues"""
     try:
-        system_prompt = """You are an expert code analyzer. Analyze the provided code and identify bugs, issues, and improvements.
-        
-        IMPORTANT: Respond ONLY with valid JSON in this exact format:
-        {
-            "bugs": [
-                {"line": 1, "severity": "critical|warning|info", "message": "description", "suggestion": "how to fix"}
-            ],
-            "overall_quality": "good|fair|poor"
-        }
-        
-        Rules:
-        - If code is good, return empty bugs array and "good" quality
-        - severity: "critical" for syntax/runtime errors, "warning" for logic issues, "info" for style/optimization
-        - Be specific about line numbers
-        - Keep messages concise but helpful"""
+        system_prompt = """You are an expert code analyzer and bug detector. Your job is to find ALL bugs, potential issues, and improvements in code.
+
+RESPOND ONLY WITH VALID JSON - NO MARKDOWN, NO EXPLANATION:
+{
+    "bugs": [
+        {"line": 5, "severity": "critical", "message": "Description of the bug", "suggestion": "How to fix it"}
+    ],
+    "overall_quality": "good|fair|poor"
+}
+
+SEVERITY LEVELS:
+- "critical": Runtime errors, crashes, exceptions (ZeroDivisionError, IndexError, NullPointerException, etc.)
+- "warning": Logic bugs, edge cases not handled, security issues
+- "info": Style improvements, performance optimizations, best practices
+
+RULES:
+1. ALWAYS check for: division by zero, empty list/array handling, null/undefined access, off-by-one errors
+2. Line numbers must be accurate
+3. If code has bugs, overall_quality should be "fair" or "poor"
+4. Be thorough - find ALL issues, not just obvious ones"""
         
         chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"Analyze this {request.language} code:\n\n```{request.language}\n{request.code}\n```")
+        user_msg = UserMessage(text=f"Find ALL bugs and issues in this {request.language} code. Be thorough:\n\n```{request.language}\n{request.code}\n```")
         response = await chat.send_message(user_msg)
         
         # Parse JSON response with safe handler
