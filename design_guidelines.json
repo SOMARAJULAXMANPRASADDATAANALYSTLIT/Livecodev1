@@ -1,0 +1,161 @@
+{
+  "identity": {
+    "name": "E1: The Anti-AI Designer",
+    "mission": "Create a 'Cyberpunk Academy' aesthetic that blends educational trust with futuristic excitement. Fusion of Swiss Precision (layout) and Neon Noir (atmosphere).",
+    "principles": [
+      "Fusion over Imitation: Mix coding IDE aesthetics with high-end editorial design.",
+      "Emotion First: The UI should feel 'intelligent' and 'alive'.",
+      "Content is King: Code and explanations are the heroes.",
+      "Negative Space: Use generous padding to prevent cognitive overload."
+    ]
+  },
+  "typography": {
+    "fonts": {
+      "heading": {
+        "family": "Outfit, sans-serif",
+        "weights": ["500", "700"],
+        "usage": "Main headings, section titles. Use tight tracking (-0.02em)."
+      },
+      "body": {
+        "family": "Plus Jakarta Sans, sans-serif",
+        "weights": ["400", "500"],
+        "usage": "Paragraphs, UI labels, chat text."
+      },
+      "code": {
+        "family": "JetBrains Mono, monospace",
+        "weights": ["400"],
+        "usage": "Code editor, snippets, terminal outputs."
+      }
+    },
+    "scale": {
+      "h1": "text-5xl md:text-7xl font-bold tracking-tight",
+      "h2": "text-3xl md:text-5xl font-bold tracking-tight",
+      "h3": "text-2xl md:text-3xl font-semibold",
+      "body_lg": "text-lg leading-relaxed",
+      "body_base": "text-base leading-relaxed text-muted-foreground"
+    }
+  },
+  "colors": {
+    "palette": {
+      "background": {
+        "default": "#0B0B0F",
+        "paper": "#13131A",
+        "subtle": "#1A1A24"
+      },
+      "primary": {
+        "gradient": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        "main": "#667eea",
+        "hover": "#764ba2",
+        "foreground": "#FFFFFF"
+      },
+      "accent": {
+        "cyan": "#00F0FF",
+        "purple": "#BD00FF",
+        "success": "#00E676",
+        "warning": "#FFD600",
+        "error": "#FF3B30"
+      },
+      "text": {
+        "primary": "#FFFFFF",
+        "secondary": "#94A3B8",
+        "muted": "#64748B"
+      }
+    },
+    "glassmorphism": {
+      "heavy": "bg-[#13131A]/70 backdrop-blur-xl border border-white/10 shadow-2xl",
+      "light": "bg-[#13131A]/40 backdrop-blur-md border border-white/5",
+      "interactive": "hover:bg-[#13131A]/90 transition-all duration-300 border border-white/10 hover:border-[#667eea]/50"
+    }
+  },
+  "layout": {
+    "grid_system": "Bento Grid (Mode A for Landing, Mode B for App)",
+    "spacing": {
+      "container_padding": "p-6 md:p-12",
+      "section_gap": "gap-8 md:gap-16",
+      "internal_padding": "p-6"
+    },
+    "border_radius": {
+      "default": "rounded-2xl",
+      "sm": "rounded-lg",
+      "lg": "rounded-3xl"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white rounded-full px-8 py-3 font-medium hover:shadow-[0_0_20px_rgba(118,75,162,0.5)] transition-all transform hover:-translate-y-0.5",
+      "secondary": "bg-white/5 border border-white/10 text-white rounded-full px-8 py-3 hover:bg-white/10 transition-all",
+      "ghost": "text-white/70 hover:text-white hover:bg-white/5 rounded-lg px-4 py-2"
+    },
+    "cards": {
+      "feature": "group relative overflow-hidden rounded-3xl bg-[#13131A]/50 border border-white/5 p-8 hover:border-[#667eea]/30 transition-all duration-500",
+      "glass": "bg-[#0B0B0F]/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-xl"
+    },
+    "inputs": {
+      "default": "bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] transition-all outline-none"
+    },
+    "monaco_editor": {
+      "theme": "vs-dark",
+      "container_style": "rounded-2xl overflow-hidden border border-white/10 shadow-2xl"
+    },
+    "chat_interface": {
+      "container": "flex flex-col h-full bg-[#13131A]/30 rounded-2xl border border-white/5",
+      "bubble_user": "bg-[#667eea] text-white rounded-2xl rounded-tr-sm px-4 py-3 max-w-[80%] self-end",
+      "bubble_ai": "bg-white/10 text-white rounded-2xl rounded-tl-sm px-4 py-3 max-w-[80%] self-start border border-white/5"
+    }
+  },
+  "visual_enhancers": {
+    "gradients": {
+      "glow": "absolute inset-0 bg-gradient-to-r from-[#667eea]/20 to-[#764ba2]/20 blur-3xl -z-10",
+      "text_gradient": "bg-clip-text text-transparent bg-gradient-to-r from-[#667eea] to-[#764ba2]"
+    },
+    "decorations": {
+      "noise": "fixed inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none z-50 mix-blend-overlay",
+      "grid_lines": "absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"
+    }
+  },
+  "images": {
+    "hero_background": {
+      "url": "https://images.unsplash.com/photo-1520781673738-c64b5a7b9299?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Neon coding environment",
+      "usage": "Hero section background with heavy overlay/blur"
+    },
+    "features": [
+      {
+        "url": "https://images.unsplash.com/photo-1744986014553-e5e866de814b?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "AI Processor Abstract",
+        "usage": "AI Analysis Feature Card"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1644088379091-d574269d422f?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Network Connections",
+        "usage": "Real-time Collaboration Feature"
+      }
+    ],
+    "social_proof": [
+      {
+        "url": "https://images.unsplash.com/photo-1758270705518-b61b40527e76?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "alt": "Students collaborating",
+        "usage": "Testimonials or Community section"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "INSTALL FONTS: Add '@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');' to index.css",
+    "THEME SETUP: Ensure 'dark' class is always applied to the html/body tag as this is a dark-mode only app.",
+    "MONACO EDITOR: Use '@monaco-editor/react'. Set theme='vs-dark'. Wrap in a container with fixed height.",
+    "SVG DIAGRAMS: Use 'framer-motion' for drawing paths. Do not just render static SVGs. Animate the strokes.",
+    "GLASSMORPHISM: Apply the 'glass.heavy' class to the main teaching overlay and analysis panels.",
+    "GRADIENTS: Use the primary gradient (#667eea -> #764ba2) for the 'Analyze Code' button and active states.",
+    "MARKDOWN: Use 'react-markdown' for rendering chat responses and teaching explanations.",
+    "TOASTS: Use 'sonner' for all notifications (bug found, code fixed, etc.)."
+  ],
+  "universal_guidelines": [
+    "Do not use generic centered layouts.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "Every interaction needs micro-animations.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Subtle grain textures and noise overlays are mandatory.",
+    "All interactive elements MUST include data-testid attribute."
+  ]
+}
