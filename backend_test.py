@@ -383,6 +383,114 @@ print(result)"""
                     print(f"   ⚠️ Missing expected response keys")
         
         return all_passed, {}
+    def test_project_upload(self):
+        """Test project upload endpoint"""
+        try:
+            zip_data = self.create_test_zip_project()
+            files = {'file': ('test_project.zip', zip_data, 'application/zip')}
+            
+            success, response = self.run_test_with_files("Project Upload", "POST", "upload-project", 200, files=files, timeout=60)
+            
+            if success and response:
+                # Store project_id for subsequent tests
+                self.project_id = response.get('project_id')
+                expected_keys = ["project_id", "name", "root", "languages", "total_files", "frameworks"]
+                if all(key in response for key in expected_keys):
+                    print(f"   ✓ Project uploaded: {response.get('name', 'N/A')}")
+                    print(f"   ✓ Total files: {response.get('total_files', 0)}")
+                    print(f"   ✓ Languages detected: {len(response.get('languages', []))}")
+                    print(f"   ✓ Frameworks: {response.get('frameworks', [])}")
+                    return True, response
+                else:
+                    print(f"   ⚠️ Missing expected response keys")
+            
+            return success, response
+            
+        except Exception as e:
+            print(f"❌ Project Upload Failed - Error: {str(e)}")
+            self.failed_tests.append({"test": "Project Upload", "error": str(e)})
+            return False, {}
+
+    def test_project_file_access(self):
+        """Test getting file content from uploaded project"""
+        if not hasattr(self, 'project_id') or not self.project_id:
+            print("❌ Skipping file access test - no project_id available")
+            return False, {}
+        
+        # Test getting main.py content
+        url = f"project/{self.project_id}/file?path=test_project/main.py"
+        success, response = self.run_test("Get File Content (main.py)", "GET", url, 200, timeout=30)
+        
+        if success and response:
+            expected_keys = ["path", "content", "language"]
+            if all(key in response for key in expected_keys):
+                print(f"   ✓ File language: {response.get('language', 'N/A')}")
+                print(f"   ✓ Content length: {len(response.get('content', ''))}")
+                if "calculate_factorial" in response.get('content', ''):
+                    print(f"   ✓ Content verification passed")
+                return True, response
+            else:
+                print(f"   ⚠️ Missing expected response keys")
+        
+        return success, response
+
+    def test_project_run(self):
+        """Test running a file from uploaded project"""
+        if not hasattr(self, 'project_id') or not self.project_id:
+            print("❌ Skipping project run test - no project_id available")
+            return False, {}
+        
+        data = {
+            "project_id": self.project_id,
+            "file_path": "test_project/main.py",
+            "skill_level": "intermediate"
+        }
+        
+        url = f"project/{self.project_id}/run"
+        success, response = self.run_test("Run Project File", "POST", url, 200, data, timeout=45)
+        
+        if success and response:
+            expected_keys = ["output", "exit_code", "execution_time"]
+            if all(key in response for key in expected_keys):
+                print(f"   ✓ Exit code: {response.get('exit_code', 'N/A')}")
+                print(f"   ✓ Execution time: {response.get('execution_time', 0):.3f}s")
+                if response.get('output'):
+                    print(f"   ✓ Output received: {len(response.get('output', ''))}")
+                if response.get('error'):
+                    print(f"   ⚠️ Error occurred: {response.get('error', '')[:100]}")
+                return True, response
+            else:
+                print(f"   ⚠️ Missing expected response keys")
+        
+        return success, response
+
+    def test_project_full_analysis(self):
+        """Test full project analysis"""
+        if not hasattr(self, 'project_id') or not self.project_id:
+            print("❌ Skipping project analysis test - no project_id available")
+            return False, {}
+        
+        data = {
+            "project_id": self.project_id,
+            "skill_level": "intermediate"
+        }
+        
+        url = f"project/{self.project_id}/analyze-full"
+        success, response = self.run_test("Full Project Analysis", "POST", url, 200, data, timeout=90)
+        
+        if success and response:
+            expected_keys = ["project_name", "purpose", "architecture_overview", "entry_points", "main_modules"]
+            if all(key in response for key in expected_keys):
+                print(f"   ✓ Project name: {response.get('project_name', 'N/A')}")
+                print(f"   ✓ Entry points: {len(response.get('entry_points', []))}")
+                print(f"   ✓ Main modules: {len(response.get('main_modules', []))}")
+                print(f"   ✓ Dependencies: {len(response.get('dependencies', []))}")
+                print(f"   ✓ Frameworks: {response.get('frameworks', [])}")
+                return True, response
+            else:
+                print(f"   ⚠️ Missing expected response keys")
+        
+        return success, response
 
     def test_code_execution(self):
         """Test code execution endpoint"""
