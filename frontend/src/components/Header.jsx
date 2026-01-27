@@ -1,4 +1,4 @@
-import { Code, Globe, MonitorPlay, Sparkles } from "lucide-react";
+import { Code, Globe, MonitorPlay, Sparkles, Brain, Bot } from "lucide-react";
 
 const Header = ({ mode, onModeChange }) => {
   return (
@@ -27,10 +27,38 @@ const Header = ({ mode, onModeChange }) => {
           className="flex items-center gap-1 p-1 rounded-full glass-light"
         >
           <button
+            data-testid="mode-learning-btn"
+            onClick={() => onModeChange("learning")}
+            className={`
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
+              ${mode === "learning" 
+                ? "mode-active text-white" 
+                : "text-white/60 hover:text-white hover:bg-white/5"
+              }
+            `}
+          >
+            <Brain className="w-4 h-4" />
+            <span className="hidden md:inline">Learning Path</span>
+          </button>
+          <button
+            data-testid="mode-agents-btn"
+            onClick={() => onModeChange("agents")}
+            className={`
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
+              ${mode === "agents" 
+                ? "mode-active text-white" 
+                : "text-white/60 hover:text-white hover:bg-white/5"
+              }
+            `}
+          >
+            <Bot className="w-4 h-4" />
+            <span className="hidden md:inline">AI Agents</span>
+          </button>
+          <button
             data-testid="mode-ide-btn"
             onClick={() => onModeChange("ide")}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-300
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
               ${mode === "ide" 
                 ? "mode-active text-white" 
                 : "text-white/60 hover:text-white hover:bg-white/5"
@@ -38,13 +66,13 @@ const Header = ({ mode, onModeChange }) => {
             `}
           >
             <MonitorPlay className="w-4 h-4" />
-            <span className="hidden sm:inline">IDE</span>
+            <span className="hidden md:inline">IDE</span>
           </button>
           <button
             data-testid="mode-code-btn"
             onClick={() => onModeChange("code")}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-300
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
               ${mode === "code" 
                 ? "mode-active text-white" 
                 : "text-white/60 hover:text-white hover:bg-white/5"
@@ -52,13 +80,13 @@ const Header = ({ mode, onModeChange }) => {
             `}
           >
             <Code className="w-4 h-4" />
-            <span className="hidden sm:inline">Code Editor</span>
+            <span className="hidden lg:inline">Code</span>
           </button>
           <button
             data-testid="mode-english-btn"
             onClick={() => onModeChange("english")}
             className={`
-              flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-300
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
               ${mode === "english" 
                 ? "mode-active text-white" 
                 : "text-white/60 hover:text-white hover:bg-white/5"
@@ -66,12 +94,12 @@ const Header = ({ mode, onModeChange }) => {
             `}
           >
             <Globe className="w-4 h-4" />
-            <span className="hidden sm:inline">English</span>
+            <span className="hidden lg:inline">English</span>
           </button>
         </div>
         
         {/* Status Badge */}
-        <div className="hidden md:flex items-center gap-2 text-xs text-white/50">
+        <div className="hidden lg:flex items-center gap-2 text-xs text-white/50">
           <Sparkles className="w-3 h-3 text-[#667eea]" />
           <span>Powered by Gemini AI</span>
         </div>
