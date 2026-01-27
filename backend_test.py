@@ -123,17 +123,42 @@ print(result)"""
         return all_passed, {}
 
     def test_generate_teaching(self):
-        """Test teaching generation endpoint"""
-        data = {
-            "code": "def divide(a, b):\n    return a / b\n\nresult = divide(10, 0)",
-            "bug": {
-                "line": 4,
-                "message": "Division by zero error",
-                "severity": "critical"
-            },
-            "mentorStyle": "patient"
-        }
-        return self.run_test("Teaching Generation", "POST", "generate-teaching", 200, data, timeout=45)
+        """Test teaching generation endpoint with skill levels"""
+        test_code = """def calculate_average(numbers):
+    total = 0
+    for num in numbers:
+        total += num
+    return total / len(numbers)
+
+result = calculate_average([])
+print(result)"""
+        
+        skill_levels = ["beginner", "intermediate", "advanced", "senior"]
+        all_passed = True
+        
+        for skill_level in skill_levels:
+            data = {
+                "code": test_code,
+                "bug": {
+                    "line": 7,
+                    "message": "Division by zero error - empty list",
+                    "severity": "critical"
+                },
+                "mentorStyle": "patient",
+                "skill_level": skill_level
+            }
+            success, response = self.run_test(f"Teaching Generation ({skill_level})", "POST", "generate-teaching", 200, data, timeout=45)
+            if not success:
+                all_passed = False
+            elif response:
+                # Check if response has expected structure
+                expected_keys = ["conceptName", "naturalExplanation", "whyItMatters", "commonMistake"]
+                if all(key in response for key in expected_keys):
+                    print(f"   ✓ Teaching concept: {response.get('conceptName', 'N/A')}")
+                else:
+                    print(f"   ⚠️ Missing expected response keys")
+        
+        return all_passed, {}
 
     def test_generate_deeper_explanation(self):
         """Test deeper explanation endpoint"""
