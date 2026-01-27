@@ -9,6 +9,9 @@ import requests
 import sys
 import json
 import base64
+import zipfile
+import tempfile
+import os
 from datetime import datetime
 from io import BytesIO
 from PIL import Image
