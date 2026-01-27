@@ -2085,7 +2085,7 @@ Target Timeline: {request.targetMonths} months""")
 
 @api_router.post("/learning/mentor")
 async def learning_mentor(request: LearningMentorRequest):
-    """Interactive mentoring session for a specific topic"""
+    """Interactive mentoring session for a specific topic with image support"""
     try:
         topic = request.topic or {}
         user_profile = request.user_profile or {}
@@ -2120,6 +2120,7 @@ YOUR ROLE:
 3. Ask follow-up questions to confirm understanding
 4. Provide practice problems when appropriate
 5. Celebrate progress and encourage the learner
+6. If an image is provided, analyze it and relate it to the learning topic
 
 RESPONSE FORMAT:
 Provide your response as helpful markdown text. Be encouraging but educational.
@@ -2132,7 +2133,15 @@ If appropriate, include a quiz question at the end."""
         for msg in request.conversation_history[-10:]:
             context += f"{msg.role}: {msg.content}\n"
         
-        user_msg = UserMessage(text=f"{context}\nUser: {request.message}")
+        # Handle image if provided
+        if request.image_base64:
+            user_msg = UserMessage(
+                text=f"{context}\nUser: {request.message}\n\n[User has shared an image for analysis]",
+                images=[ImageContent(base64=request.image_base64)]
+            )
+        else:
+            user_msg = UserMessage(text=f"{context}\nUser: {request.message}")
+        
         response = await chat.send_message(user_msg)
         
         return {
