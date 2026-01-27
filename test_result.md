@@ -240,6 +240,42 @@ backend:
         agent: "testing"
         comment: "✅ PASSED - Tested teaching generation across all skill levels. API adapts concept names and explanations appropriately (e.g., 'Empty List Trap' for beginners vs 'Zero-Arity Input Handling' for seniors). All required response fields present."
 
+  - task: "Visual Generation for Agents API"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ REVIEW REQUEST TESTING COMPLETE - POST /api/agent/generate-visual endpoint working perfectly. Successfully tested with agent_type=coding, topic='REST API', visual_type=diagram as requested. Endpoint accepts form data correctly and generates visual content successfully. Response contains visual content (image_url/svg/diagram fields detected)."
+
+  - task: "News Feed API"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ REVIEW REQUEST TESTING COMPLETE - GET /api/news/feed endpoint working perfectly. Returns 6 articles with proper structure. Successfully detected real news URLs including techcrunch.com domains as requested. Articles contain proper URL structure pointing to legitimate news sites, meeting the requirement for 'real-looking URLs to news sites'."
+
+  - task: "Company Analysis (Business Agent) API"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "✅ REVIEW REQUEST TESTING COMPLETE - POST /api/agent/business/analyze endpoint working perfectly. Successfully analyzed OpenAI company (https://openai.com) and returned comprehensive 8-sheet analysis as requested. Response includes: company_name='OpenAI', sheets with 8 comprehensive analysis sections ['1_Company_Overview', '2_Products_Services', '3_Customer_Success', '4_Pain_Points', '5_Competitive_Analysis', '6_Case_Studies', '7_Pricing_Model', '8_OKRs_Strategy'], and html_report. Meets requirement for '8-sheet output' business analysis."
+
 frontend:
   - task: "Skill Level Selection UI"
     implemented: true
