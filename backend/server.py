@@ -1354,6 +1354,10 @@ RESPOND ONLY WITH VALID JSON:
         response = await chat.send_message(user_msg)
         data = safe_parse_json(response, {"has_issue": False, "severity": "info"})
         
+        # Ensure severity is always a valid string
+        if not data.get("severity") or data.get("severity") is None:
+            data["severity"] = "info"
+        
         return ProactiveMentorResponse(**data)
     except Exception as e:
         logger.error(f"Proactive mentor error: {e}")
