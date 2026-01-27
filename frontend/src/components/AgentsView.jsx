@@ -147,6 +147,45 @@ const AgentsView = () => {
     setSpecialResult(null);
 
     try {
+      // Check for visual/diagram generation request
+      const isVisualRequest = /diagram|visual|flowchart|chart|image|map|illustrat/i.test(currentInput);
+      
+      if (isVisualRequest) {
+        // Generate visual
+        const formData = new FormData();
+        formData.append('agent_type', activeAgent);
+        formData.append('topic', currentInput);
+        formData.append('visual_type', currentInput.toLowerCase().includes('flowchart') ? 'flowchart' : 
+                                        currentInput.toLowerCase().includes('chart') ? 'chart' :
+                                        currentInput.toLowerCase().includes('map') ? 'map' : 'diagram');
+        
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: "🎨 Generating visual diagram...",
+          agent: activeAgent 
+        }]);
+        
+        const visualResponse = await fetch(`${BACKEND_URL}/api/agent/generate-visual`, {
+          method: "POST",
+          body: formData
+        });
+        
+        if (visualResponse.ok) {
+          const visualData = await visualResponse.json();
+          setSpecialResult({ type: "visual", data: visualData });
+          setMessages(prev => {
+            const newMessages = [...prev];
+            newMessages[newMessages.length - 1] = {
+              role: "assistant",
+              content: `Here's your visual diagram for: **${visualData.topic}**`,
+              agent: activeAgent
+            };
+            return newMessages;
+          });
+        } else {
+          throw new Error("Visual generation failed");
+        }
+      }
       // Check for special agent actions
       if (activeAgent === "health" && currentInput.toLowerCase().startsWith("explain ")) {
         const topic = currentInput.substring(8);
