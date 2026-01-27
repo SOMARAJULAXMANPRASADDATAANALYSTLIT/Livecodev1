@@ -90,18 +90,37 @@ class LiveCodeMentorTester:
         return self.run_test("Health Check", "GET", "health", 200)
 
     def test_analyze_code(self):
-        """Test code analysis endpoint"""
-        test_code = """def divide(a, b):
-    return a / b
+        """Test code analysis endpoint with skill levels"""
+        test_code = """def calculate_average(numbers):
+    total = 0
+    for num in numbers:
+        total += num
+    return total / len(numbers)
 
-result = divide(10, 0)
+result = calculate_average([])
 print(result)"""
         
-        data = {
-            "code": test_code,
-            "language": "python"
-        }
-        return self.run_test("Code Analysis", "POST", "analyze-code", 200, data, timeout=45)
+        # Test with different skill levels
+        skill_levels = ["beginner", "intermediate", "advanced", "senior"]
+        all_passed = True
+        
+        for skill_level in skill_levels:
+            data = {
+                "code": test_code,
+                "language": "python",
+                "skill_level": skill_level
+            }
+            success, response = self.run_test(f"Code Analysis ({skill_level})", "POST", "analyze-code", 200, data, timeout=45)
+            if not success:
+                all_passed = False
+            elif response:
+                # Check if response has expected structure
+                if "bugs" in response and "overall_quality" in response:
+                    print(f"   ✓ Found {len(response['bugs'])} bugs, quality: {response['overall_quality']}")
+                else:
+                    print(f"   ⚠️ Missing expected response structure")
+        
+        return all_passed, {}
 
     def test_generate_teaching(self):
         """Test teaching generation endpoint"""
