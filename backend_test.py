@@ -383,11 +383,17 @@ print(result)"""
         print(f"📍 Base URL: {self.base_url}")
         print("=" * 60)
 
-        # Test all endpoints
+        # Test all endpoints - prioritizing high-priority enhanced features
         tests = [
             self.test_health,
+            # High priority enhanced features
             self.test_analyze_code,
+            self.test_line_mentoring,
+            self.test_code_execution,
+            self.test_proactive_mentor,
             self.test_generate_teaching,
+            self.test_fix_code,
+            # Other existing features
             self.test_generate_deeper_explanation,
             self.test_generate_visual_diagram,
             self.test_evaluate_answer,
