@@ -6,10 +6,11 @@ import CodeLearningView from "./components/CodeLearningView";
 import EnglishChatView from "./components/EnglishChatView";
 import IDEView from "./components/IDEView";
 import AgentsView from "./components/AgentsView";
+import LearningPathView from "./components/LearningPathView";
 import { MentorProvider } from "./contexts/MentorContext";
 
 function App() {
-  const [mode, setMode] = useState("agents");
+  const [mode, setMode] = useState("learning");
 
   return (
     <MentorProvider>
@@ -18,7 +19,9 @@ function App() {
         <div className="relative z-10 flex flex-col min-h-screen">
           <Header mode={mode} onModeChange={setMode} />
           <main className="flex-1 p-4 md:p-6 lg:p-8">
-            {mode === "agents" ? (
+            {mode === "learning" ? (
+              <LearningPathView />
+            ) : mode === "agents" ? (
               <AgentsView />
             ) : mode === "ide" ? (
               <IDEView />
