@@ -357,12 +357,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Skill-Level Aware Code Analysis API"
-    - "Line-Level Mentoring API"
-    - "Code Execution API"
-    - "Proactive Mentor API"
-    - "AI Code Fix API"
-    - "Teaching Generation API"
+    - "Visual Generation for Agents API"
+    - "News Feed API" 
+    - "Company Analysis (Business Agent) API"
+    - "Project Upload and Analysis APIs"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
