@@ -213,6 +213,170 @@ print(result)"""
             self.failed_tests.append({"test": "Image Analysis", "error": f"Image creation error: {str(e)}"})
             return False, {}
 
+    def test_line_mentoring(self):
+        """Test line-level mentoring endpoint"""
+        test_code = """def calculate_average(numbers):
+    total = 0
+    for num in numbers:
+        total += num
+    return total / len(numbers)
+
+result = calculate_average([])
+print(result)"""
+        
+        skill_levels = ["beginner", "intermediate", "advanced", "senior"]
+        all_passed = True
+        
+        for skill_level in skill_levels:
+            data = {
+                "code": test_code,
+                "language": "python",
+                "selected_lines": [5, 7],  # Focus on the division and function call
+                "full_context": "Learning about division by zero errors",
+                "skill_level": skill_level,
+                "question": "Why does this code fail?"
+            }
+            success, response = self.run_test(f"Line Mentoring ({skill_level})", "POST", "line-mentoring", 200, data, timeout=45)
+            if not success:
+                all_passed = False
+            elif response:
+                expected_keys = ["explanation", "what_it_does", "potential_issues", "improvement_suggestions", "teaching_points"]
+                if all(key in response for key in expected_keys):
+                    print(f"   ✓ Issues found: {len(response.get('potential_issues', []))}")
+                else:
+                    print(f"   ⚠️ Missing expected response keys")
+        
+        return all_passed, {}
+
+    def test_code_execution(self):
+        """Test code execution endpoint"""
+        # Test Python execution
+        python_code = """def greet(name):
+    return f"Hello, {name}!"
+
+print(greet("World"))"""
+        
+        # Test JavaScript execution  
+        js_code = """function greet(name) {
+    return `Hello, ${name}!`;
+}
+
+console.log(greet("World"));"""
+        
+        # Test Python with error
+        python_error_code = """def calculate_average(numbers):
+    total = 0
+    for num in numbers:
+        total += num
+    return total / len(numbers)
+
+result = calculate_average([])
+print(result)"""
+        
+        test_cases = [
+            ("Python Success", python_code, "python", "beginner"),
+            ("JavaScript Success", js_code, "javascript", "intermediate"), 
+            ("Python Error", python_error_code, "python", "advanced")
+        ]
+        
+        all_passed = True
+        
+        for test_name, code, language, skill_level in test_cases:
+            data = {
+                "code": code,
+                "language": language,
+                "skill_level": skill_level
+            }
+            success, response = self.run_test(f"Code Execution - {test_name}", "POST", "execute-code", 200, data, timeout=45)
+            if not success:
+                all_passed = False
+            elif response:
+                expected_keys = ["output", "execution_time"]
+                if all(key in response for key in expected_keys):
+                    if response.get("error"):
+                        print(f"   ✓ Error detected with explanation: {bool(response.get('error_explanation'))}")
+                    else:
+                        print(f"   ✓ Execution time: {response.get('execution_time', 0):.3f}s")
+                else:
+                    print(f"   ⚠️ Missing expected response keys")
+        
+        return all_passed, {}
+
+    def test_proactive_mentor(self):
+        """Test proactive mentor endpoint"""
+        # Test code with common issues
+        test_codes = [
+            ("Async Issue", "async function getData() { return fetch('/api/data'); }", "javascript"),
+            ("Division by Zero", "def calc(x): return 10/x\nresult = calc(0)", "python"),
+            ("Clean Code", "def add(a, b): return a + b", "python")
+        ]
+        
+        skill_levels = ["beginner", "intermediate", "advanced", "senior"]
+        all_passed = True
+        
+        for code_name, code, language in test_codes:
+            for skill_level in skill_levels:
+                data = {
+                    "code": code,
+                    "language": language,
+                    "skill_level": skill_level,
+                    "cursor_position": 10
+                }
+                success, response = self.run_test(f"Proactive Mentor - {code_name} ({skill_level})", "POST", "proactive-mentor", 200, data, timeout=30)
+                if not success:
+                    all_passed = False
+                elif response:
+                    expected_keys = ["has_issue", "severity"]
+                    if all(key in response for key in expected_keys):
+                        if response.get("has_issue"):
+                            print(f"   ✓ Issue detected: {response.get('issue_type', 'N/A')} ({response.get('severity', 'N/A')})")
+                        else:
+                            print(f"   ✓ No issues detected")
+                    else:
+                        print(f"   ⚠️ Missing expected response keys")
+        
+        return all_passed, {}
+
+    def test_fix_code(self):
+        """Test AI code fixing endpoint"""
+        test_code = """def calculate_average(numbers):
+    total = 0
+    for num in numbers:
+        total += num
+    return total / len(numbers)
+
+result = calculate_average([])
+print(result)"""
+        
+        skill_levels = ["beginner", "intermediate", "advanced", "senior"]
+        all_passed = True
+        
+        for skill_level in skill_levels:
+            for apply_comments in [False, True]:
+                data = {
+                    "code": test_code,
+                    "language": "python",
+                    "bugs": [
+                        {"line": 5, "message": "Division by zero when empty list", "severity": "critical"}
+                    ],
+                    "skill_level": skill_level,
+                    "apply_inline_comments": apply_comments
+                }
+                test_name = f"Fix Code ({skill_level})" + (" with comments" if apply_comments else "")
+                success, response = self.run_test(test_name, "POST", "fix-code", 200, data, timeout=45)
+                if not success:
+                    all_passed = False
+                elif response:
+                    expected_keys = ["fixed_code", "explanation", "changes_made"]
+                    if all(key in response for key in expected_keys):
+                        print(f"   ✓ Changes made: {len(response.get('changes_made', []))}")
+                        if apply_comments and "# " in response.get('fixed_code', ''):
+                            print(f"   ✓ Inline comments added")
+                    else:
+                        print(f"   ⚠️ Missing expected response keys")
+        
+        return all_passed, {}
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting Live Code Mentor API Tests")
