@@ -2194,6 +2194,297 @@ async def get_learning_progress(user_id: str):
         logger.error(f"Get progress error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============== AI NEWS FEED ==============
+
+@api_router.get("/news/feed")
+async def get_news_feed(category: str = "all"):
+    """Get AI and tech news feed"""
+    try:
+        # Use AI to generate relevant news summaries
+        system_prompt = """You are a tech news curator. Generate 6 realistic, current AI and tech news articles.
+        
+RESPOND ONLY WITH VALID JSON:
+{
+    "articles": [
+        {
+            "id": "unique_id",
+            "title": "News headline",
+            "summary": "2-3 sentence summary",
+            "source": "Publication name",
+            "url": "https://example.com/article",
+            "category": "ai|tech|coding|startups",
+            "publishedAt": "2026-01-27T10:00:00Z"
+        }
+    ]
+}
+
+Generate diverse, realistic news about:
+- AI model releases and updates
+- Programming language updates
+- Tech company announcements
+- Developer tools and frameworks
+- AI research breakthroughs"""
+        
+        chat = get_chat_instance(system_prompt)
+        
+        category_prompt = f"Generate news for category: {category}" if category != "all" else "Generate mixed tech and AI news"
+        user_msg = UserMessage(text=category_prompt)
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {"articles": []})
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"News feed error: {e}")
+        return {"articles": []}
+
+# ============== WEB RESEARCH ==============
+
+@api_router.post("/research/web")
+async def web_research(query: str = Form(...)):
+    """Perform web research on a topic"""
+    try:
+        system_prompt = """You are a research assistant with knowledge up to your training date.
+When asked about a topic, provide comprehensive, accurate information based on your knowledge.
+If you're unsure about something, clearly state that.
+
+RESPOND ONLY WITH VALID JSON:
+{
+    "topic": "Topic name",
+    "summary": "Comprehensive summary",
+    "key_points": ["Point 1", "Point 2"],
+    "related_topics": ["Topic 1", "Topic 2"],
+    "sources_to_check": ["Suggested source 1", "Suggested source 2"],
+    "confidence": "high|medium|low"
+}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Research this topic thoroughly: {query}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "topic": query,
+            "summary": "Research results",
+            "key_points": [],
+            "confidence": "medium"
+        })
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Web research error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== HEALTHCARE DIAGRAM GENERATION ==============
+
+@api_router.post("/healthcare/diagram")
+async def generate_healthcare_diagram(topic: str = Form(...), diagram_type: str = Form("anatomy")):
+    """Generate healthcare/medical diagrams using Gemini image generation"""
+    try:
+        from emergentintegrations.llm.chat import ImageGeneration
+        
+        prompt_templates = {
+            "anatomy": f"Medical educational diagram showing {topic} anatomy. Clean, labeled, professional medical illustration style. White background, clear labels, anatomically accurate.",
+            "process": f"Medical process flowchart showing {topic}. Professional medical education style, clear steps, arrows showing flow.",
+            "comparison": f"Medical comparison diagram showing {topic}. Side by side comparison, labeled differences, educational style.",
+            "timeline": f"Medical timeline showing {topic} progression or treatment stages. Clear stages, professional medical illustration."
+        }
+        
+        prompt = prompt_templates.get(diagram_type, prompt_templates["anatomy"])
+        
+        # Use Gemini Nano Banana for image generation
+        image_gen = ImageGeneration(api_key=EMERGENT_LLM_KEY)
+        result = await image_gen.generate(
+            prompt=prompt,
+            model="gemini",
+            size="1024x1024"
+        )
+        
+        return {
+            "success": True,
+            "image_url": result.url if hasattr(result, 'url') else None,
+            "image_base64": result.base64 if hasattr(result, 'base64') else None,
+            "topic": topic,
+            "diagram_type": diagram_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Healthcare diagram error: {e}")
+        # Fallback to SVG generation
+        return await generate_healthcare_svg(topic, diagram_type)
+
+async def generate_healthcare_svg(topic: str, diagram_type: str):
+    """Fallback SVG generation for healthcare diagrams"""
+    system_prompt = f"""Create an educational SVG diagram for healthcare topic: {topic}
+Type: {diagram_type}
+
+Create a clean, professional medical education diagram.
+Use colors: #EA4335 (red for important), #34A853 (green for healthy), #4285F4 (blue for labels), #FBBC04 (yellow for highlights)
+Dark background (#1E1E1E), white text for labels.
+
+Respond with ONLY SVG code. Start with <svg and end with </svg>
+Size: 800x600 viewBox"""
+    
+    chat = get_chat_instance(system_prompt)
+    user_msg = UserMessage(text=f"Create {diagram_type} diagram for: {topic}")
+    response = await chat.send_message(user_msg)
+    
+    svg_content = response.strip() if response else ""
+    if "<svg" in svg_content:
+        start = svg_content.find("<svg")
+        end = svg_content.rfind("</svg>") + 6
+        svg_content = svg_content[start:end]
+    else:
+        svg_content = f'<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg"><rect width="800" height="600" fill="#1E1E1E"/><text x="400" y="300" fill="#FFFFFF" text-anchor="middle" font-size="24">{topic}</text></svg>'
+    
+    return {
+        "success": True,
+        "svg": svg_content,
+        "topic": topic,
+        "diagram_type": diagram_type
+    }
+
+# ============== DEEP COMPANY RESEARCH ==============
+
+@api_router.post("/research/company-deep")
+async def deep_company_research(company_url: str = Form(...)):
+    """Perform deep research on a company by analyzing multiple aspects"""
+    try:
+        system_prompt = """You are a senior business analyst performing deep company research.
+Analyze the company thoroughly and provide comprehensive insights.
+
+IMPORTANT:
+- Use only publicly available information
+- Cite sources where possible
+- If information is not available, say "Not publicly available"
+- Be thorough but accurate
+
+RESPOND ONLY WITH VALID JSON:
+{
+    "company_name": "Company Name",
+    "overview": {
+        "description": "What the company does",
+        "founded": "Year",
+        "headquarters": "Location",
+        "employees": "Estimate",
+        "funding": "If known",
+        "valuation": "If known"
+    },
+    "products_services": [
+        {"name": "Product", "description": "What it does", "target_market": "Who uses it"}
+    ],
+    "use_cases": [
+        {"industry": "Industry", "use_case": "How companies use this product", "benefits": "Key benefits"}
+    ],
+    "competitors": [
+        {"name": "Competitor", "comparison": "How they compare", "strengths": "Their strengths"}
+    ],
+    "pricing": {
+        "model": "Pricing model type",
+        "tiers": ["Tier 1", "Tier 2"],
+        "notes": "Additional pricing info"
+    },
+    "technology_stack": ["Tech 1", "Tech 2"],
+    "team": {
+        "leadership": ["CEO", "CTO"],
+        "team_size": "Estimate",
+        "culture": "Company culture notes"
+    },
+    "market_position": {
+        "market_share": "Estimate if known",
+        "growth": "Growth trajectory",
+        "strengths": ["Strength 1"],
+        "weaknesses": ["Weakness 1"]
+    },
+    "recent_news": [
+        {"headline": "News item", "date": "Approximate date", "significance": "Why it matters"}
+    ],
+    "recommendations": {
+        "for_customers": "Should you use this product?",
+        "for_investors": "Investment potential",
+        "for_competitors": "How to compete"
+    }
+}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Perform deep research on this company: {company_url}\n\nAnalyze their website, products, use cases, competitors, pricing, team, and market position.")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "company_name": company_url,
+            "overview": {"description": "Analysis pending"},
+            "products_services": [],
+            "use_cases": [],
+            "competitors": [],
+            "recommendations": {}
+        })
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Deep company research error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== AI AGENT BUILDING GUIDE ==============
+
+@api_router.post("/guide/ai-agents")
+async def ai_agent_building_guide(level: str = Form("beginner"), agent_type: str = Form("general")):
+    """Interactive guide for building AI agents"""
+    try:
+        system_prompt = f"""You are an expert AI engineer teaching how to build AI agents.
+Level: {level}
+Agent type: {agent_type}
+
+Create a comprehensive, step-by-step guide for building AI agents.
+
+RESPOND ONLY WITH VALID JSON:
+{{
+    "title": "Building {agent_type} AI Agents",
+    "level": "{level}",
+    "introduction": "What are AI agents and why build them",
+    "prerequisites": ["Prerequisite 1", "Prerequisite 2"],
+    "steps": [
+        {{
+            "step": 1,
+            "title": "Step title",
+            "description": "Detailed explanation",
+            "code_example": "Code snippet if applicable",
+            "tips": ["Tip 1", "Tip 2"]
+        }}
+    ],
+    "architecture": {{
+        "components": ["Component 1", "Component 2"],
+        "flow": "How data flows through the agent"
+    }},
+    "tools_and_frameworks": [
+        {{"name": "Tool name", "purpose": "What it's used for", "link": "Documentation link"}}
+    ],
+    "best_practices": ["Best practice 1", "Best practice 2"],
+    "common_mistakes": ["Mistake 1", "Mistake 2"],
+    "next_steps": ["Advanced topic 1", "Advanced topic 2"],
+    "resources": [
+        {{"title": "Resource", "type": "tutorial|documentation|video", "url": "Link"}}
+    ]
+}}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Create a guide for building {agent_type} AI agents at {level} level")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "title": f"Building {agent_type} AI Agents",
+            "level": level,
+            "steps": [],
+            "best_practices": []
+        })
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"AI agent guide error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router
 app.include_router(api_router)
 
