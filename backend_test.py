@@ -417,8 +417,8 @@ print(result)"""
             print("❌ Skipping file access test - no project_id available")
             return False, {}
         
-        # Test getting main.py content
-        url = f"project/{self.project_id}/file?path=test_project/main.py"
+        # Test getting main.py content (files are in root, not subdirectory)
+        url = f"project/{self.project_id}/file?path=main.py"
         success, response = self.run_test("Get File Content (main.py)", "GET", url, 200, timeout=30)
         
         if success and response:
@@ -442,7 +442,7 @@ print(result)"""
         
         data = {
             "project_id": self.project_id,
-            "file_path": "test_project/main.py",
+            "file_path": "main.py",  # Files are in root, not subdirectory
             "skill_level": "intermediate"
         }
         
