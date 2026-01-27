@@ -4,10 +4,11 @@ import { Toaster } from "@/components/ui/sonner";
 import Header from "@/components/Header";
 import CodeLearningView from "@/components/CodeLearningView";
 import EnglishChatView from "@/components/EnglishChatView";
+import IDEView from "@/components/IDEView";
 import { MentorProvider } from "@/contexts/MentorContext";
 
 function App() {
-  const [mode, setMode] = useState("code"); // "code" or "english"
+  const [mode, setMode] = useState("ide"); // "ide", "code", or "english"
 
   return (
     <MentorProvider>
@@ -20,7 +21,9 @@ function App() {
           <Header mode={mode} onModeChange={setMode} />
           
           <main className="flex-1 p-4 md:p-6 lg:p-8">
-            {mode === "code" ? (
+            {mode === "ide" ? (
+              <IDEView />
+            ) : mode === "code" ? (
               <CodeLearningView />
             ) : (
               <EnglishChatView />
