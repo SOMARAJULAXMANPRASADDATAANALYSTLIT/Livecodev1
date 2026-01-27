@@ -1352,7 +1352,7 @@ RESPOND ONLY WITH VALID JSON:
         chat = get_chat_instance(system_prompt)
         user_msg = UserMessage(text=f"Check this {request.language} code:\n```{request.language}\n{request.code}\n```")
         response = await chat.send_message(user_msg)
-        data = safe_parse_json(response, {"has_issue": False})
+        data = safe_parse_json(response, {"has_issue": False, "severity": "info"})
         
         return ProactiveMentorResponse(**data)
     except Exception as e:
