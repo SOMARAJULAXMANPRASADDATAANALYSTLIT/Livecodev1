@@ -3,7 +3,7 @@ import {
   Code, Stethoscope, Plane, BarChart3, Send, Loader2, 
   Download, Lightbulb, ChevronRight, Building, MapPin,
   Heart, FileText, Globe, Calendar, DollarSign, Users,
-  Activity, Clock, Star, ExternalLink, Map
+  Activity, Clock, Star, ExternalLink, Map, Mic, MicOff, Image, X
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -28,6 +28,76 @@ const AgentsView = () => {
   const [specialResult, setSpecialResult] = useState(null);
   const messagesEndRef = useRef(null);
 
+  // Voice input state
+  const [isListening, setIsListening] = useState(false);
+  const [recognition, setRecognition] = useState(null);
+
+  // Image input state
+  const [selectedImage, setSelectedImage] = useState(null);
+  const fileInputRef = useRef(null);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognitionInstance = new SpeechRecognition();
+      recognitionInstance.continuous = false;
+      recognitionInstance.interimResults = true;
+      recognitionInstance.lang = 'en-US';
+
+      recognitionInstance.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join('');
+        setInput(transcript);
+      };
+
+      recognitionInstance.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionInstance.onerror = () => {
+        setIsListening(false);
+      };
+
+      setRecognition(recognitionInstance);
+    }
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (!recognition) {
+      toast.error('Voice input not supported');
+      return;
+    }
+    if (isListening) {
+      recognition.stop();
+    } else {
+      recognition.start();
+      setIsListening(true);
+      toast.info('Listening...');
+    }
+  };
+
+  const handleImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage({
+          file,
+          preview: reader.result,
+          base64: reader.result.split(',')[1]
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -40,6 +110,7 @@ const AgentsView = () => {
     setMessages([]);
     setSuggestions([]);
     setSpecialResult(null);
+    setSelectedImage(null);
     const agent = AGENTS.find(a => a.id === activeAgent);
     if (agent) {
       setMessages([{
@@ -48,6 +119,7 @@ const AgentsView = () => {
         agent: activeAgent
       }]);
     }
+  }, [activeAgent]);
   }, [activeAgent]);
 
   const getWelcomeMessage = (agentType) => {
