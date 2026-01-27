@@ -9,11 +9,9 @@ import AgentsView from "./components/AgentsView";
 import LearningPathView from "./components/LearningPathView";
 import AINewsFeed from "./components/AINewsFeed";
 import { MentorProvider } from "./contexts/MentorContext";
-import { Newspaper, X } from "lucide-react";
 
 function App() {
   const [mode, setMode] = useState("learning");
-  const [showNews, setShowNews] = useState(false);
 
   return (
     <MentorProvider>
@@ -26,6 +24,10 @@ function App() {
               <LearningPathView />
             ) : mode === "agents" ? (
               <AgentsView />
+            ) : mode === "news" ? (
+              <div className="max-w-4xl mx-auto">
+                <AINewsFeed />
+              </div>
             ) : mode === "ide" ? (
               <IDEView />
             ) : mode === "code" ? (
@@ -35,27 +37,6 @@ function App() {
             )}
           </main>
         </div>
-        
-        {/* AI News Floating Button */}
-        <button
-          onClick={() => setShowNews(!showNews)}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-[#667eea] to-[#764ba2] rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-50"
-          data-testid="news-toggle-btn"
-        >
-          {showNews ? (
-            <X className="w-6 h-6 text-white" />
-          ) : (
-            <Newspaper className="w-6 h-6 text-white" />
-          )}
-        </button>
-
-        {/* AI News Sidebar */}
-        {showNews && (
-          <div className="fixed right-6 bottom-24 w-96 max-h-[70vh] z-50 animate-in slide-in-from-right">
-            <AINewsFeed />
-          </div>
-        )}
-        
         <Toaster position="bottom-right" richColors />
       </div>
     </MentorProvider>
