@@ -703,6 +703,40 @@ const SpecialResultCard = ({ result, onDownload }) => {
     );
   }
   
+  if (result.type === "visual") {
+    const { data } = result;
+    return (
+      <div className="glass-light rounded-2xl p-6 border border-[#667eea]/30">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-[#667eea]/20 flex items-center justify-center">
+            <Image className="w-5 h-5 text-[#667eea]" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">Visual Diagram</h3>
+            <p className="text-xs text-white/50">{data.visual_type} for {data.agent_type}</p>
+          </div>
+        </div>
+        
+        {data.image_url ? (
+          <div className="rounded-xl overflow-hidden border border-white/10">
+            <img src={data.image_url} alt={data.topic} className="w-full object-contain max-h-96" />
+          </div>
+        ) : data.image_base64 ? (
+          <div className="rounded-xl overflow-hidden border border-white/10">
+            <img src={`data:image/png;base64,${data.image_base64}`} alt={data.topic} className="w-full object-contain max-h-96" />
+          </div>
+        ) : (
+          <div className="p-8 text-center text-white/50">
+            <Image className="w-12 h-12 mx-auto mb-2 opacity-50" />
+            <p>Visual generation in progress...</p>
+          </div>
+        )}
+        
+        <p className="text-sm text-white/60 mt-4">{data.topic}</p>
+      </div>
+    );
+  }
+  
   if (result.type === "business") {
     const { data } = result;
     const sheets = data.sheets || {};
