@@ -1234,12 +1234,6 @@ def detect_run_commands(workspace_path: Path) -> dict:
         commands["dev"] = commands.get("dev") or "docker run -p 3000:3000 myapp"
     
     return commands
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Full project analysis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # ============== CODE ANALYSIS ENDPOINTS ==============
 
