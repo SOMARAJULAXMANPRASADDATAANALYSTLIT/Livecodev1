@@ -296,14 +296,23 @@ const AgentsView = () => {
 
   const handleBusinessAnalysis = async (message) => {
     try {
-      // Extract URL from message
+      // Extract URL from message, or use company name
       const urlMatch = message.match(/(https?:\/\/[^\s]+|www\.[^\s]+)/i);
-      const url = urlMatch ? urlMatch[1] : "";
+      let url = urlMatch ? urlMatch[1] : "";
+      
+      // If no URL, try to extract company name
+      if (!url) {
+        const companyMatch = message.match(/(?:analyze|research)\s+(.+?)(?:\s*company)?$/i);
+        if (companyMatch) {
+          const companyName = companyMatch[1].trim();
+          url = `https://${companyName.toLowerCase().replace(/\s+/g, '')}.com`;
+        }
+      }
       
       if (!url) {
         setMessages(prev => [...prev, { 
           role: "assistant", 
-          content: "Please provide a valid company URL to analyze (e.g., https://stripe.com)",
+          content: "Please provide a company name or URL to analyze (e.g., 'Analyze Stripe' or 'https://stripe.com')",
           agent: activeAgent 
         }]);
         return;
