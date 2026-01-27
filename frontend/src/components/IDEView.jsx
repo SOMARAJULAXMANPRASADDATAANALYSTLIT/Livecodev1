@@ -1,14 +1,9 @@
 import React, { useState } from "react";
-import { FolderOpen, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useMentor } from "@/contexts/MentorContext";
-import ProjectUploadZone from "@/components/ide/ProjectUploadZone";
-import IDEWorkspace from "@/components/ide/IDEWorkspace";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import ProjectUploadZone from "./ide/ProjectUploadZone";
+import IDEWorkspace from "./ide/IDEWorkspace";
 
 const IDEView = () => {
-  const { skillLevel } = useMentor();
   const [project, setProject] = useState(null);
   const [showUpload, setShowUpload] = useState(true);
 
