@@ -186,16 +186,33 @@ const AgentsView = () => {
           throw new Error("Visual generation failed");
         }
       }
-      // Check for special agent actions
-      if (activeAgent === "health" && currentInput.toLowerCase().startsWith("explain ")) {
-        const topic = currentInput.substring(8);
+      // Health agent - detect explain requests OR medical topics
+      else if (activeAgent === "health" && (
+        currentInput.toLowerCase().startsWith("explain ") ||
+        /diabetes|blood pressure|heart|health|symptom|disease|condition|treatment|medicine|pain|fever|cough|cold|flu|cancer|infection/i.test(currentInput)
+      )) {
+        const topic = currentInput.toLowerCase().startsWith("explain ") 
+          ? currentInput.substring(8) 
+          : currentInput;
         await handleHealthExplain(topic);
-      } else if (activeAgent === "travel" && currentInput.toLowerCase().includes("plan") && currentInput.toLowerCase().includes("trip")) {
+      }
+      // Travel agent - detect trip planning requests
+      else if (activeAgent === "travel" && (
+        (currentInput.toLowerCase().includes("plan") && (currentInput.toLowerCase().includes("trip") || currentInput.toLowerCase().includes("travel"))) ||
+        /trip to|visit|itinerary|travel|vacation|holiday/i.test(currentInput)
+      )) {
         await handleTravelPlan(currentInput);
-      } else if (activeAgent === "business" && (currentInput.includes("http") || currentInput.includes("www"))) {
+      }
+      // Business agent - detect company analysis requests
+      else if (activeAgent === "business" && (
+        currentInput.includes("http") || 
+        currentInput.includes("www") ||
+        /analyze|research|company|business|competitor/i.test(currentInput)
+      )) {
         await handleBusinessAnalysis(currentInput);
-      } else {
-        // Regular chat
+      }
+      // Regular chat for all other cases
+      else {
         const response = await fetch(`${BACKEND_URL}/api/agent/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
