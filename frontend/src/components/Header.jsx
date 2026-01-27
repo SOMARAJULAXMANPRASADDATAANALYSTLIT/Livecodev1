@@ -1,4 +1,4 @@
-import { Code, Globe, MonitorPlay, Sparkles, Brain, Bot } from "lucide-react";
+import { Code, Globe, MonitorPlay, Sparkles, Brain, Bot, Newspaper } from "lucide-react";
 
 const Header = ({ mode, onModeChange }) => {
   return (
@@ -17,7 +17,7 @@ const Header = ({ mode, onModeChange }) => {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight">Live Code Mentor</h1>
-            <p className="text-xs text-white/50 hidden sm:block">AI-Powered IDE & Learning Platform</p>
+            <p className="text-xs text-white/50 hidden sm:block">AI-Powered Learning Platform</p>
           </div>
         </div>
 
@@ -38,7 +38,7 @@ const Header = ({ mode, onModeChange }) => {
             `}
           >
             <Brain className="w-4 h-4" />
-            <span className="hidden md:inline">Learning Path</span>
+            <span className="hidden md:inline">Learning</span>
           </button>
           <button
             data-testid="mode-agents-btn"
@@ -52,7 +52,21 @@ const Header = ({ mode, onModeChange }) => {
             `}
           >
             <Bot className="w-4 h-4" />
-            <span className="hidden md:inline">AI Agents</span>
+            <span className="hidden md:inline">Agents</span>
+          </button>
+          <button
+            data-testid="mode-news-btn"
+            onClick={() => onModeChange("news")}
+            className={`
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
+              ${mode === "news" 
+                ? "mode-active text-white" 
+                : "text-white/60 hover:text-white hover:bg-white/5"
+              }
+            `}
+          >
+            <Newspaper className="w-4 h-4" />
+            <span className="hidden md:inline">News</span>
           </button>
           <button
             data-testid="mode-ide-btn"
@@ -66,7 +80,7 @@ const Header = ({ mode, onModeChange }) => {
             `}
           >
             <MonitorPlay className="w-4 h-4" />
-            <span className="hidden md:inline">IDE</span>
+            <span className="hidden lg:inline">IDE</span>
           </button>
           <button
             data-testid="mode-code-btn"
