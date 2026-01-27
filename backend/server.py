@@ -1224,6 +1224,110 @@ RULES:
         logger.error(f"Fix code error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Models for execute-code endpoint
+class ExecuteCodeRequest(BaseModel):
+    code: str
+    language: str
+    skill_level: str = "intermediate"
+
+class ExecuteCodeResponse(BaseModel):
+    output: str
+    error: Optional[str] = None
+    exit_code: int
+    execution_time: float
+    error_explanation: Optional[str] = None
+    fix_suggestion: Optional[str] = None
+
+@api_router.post("/execute-code", response_model=ExecuteCodeResponse)
+async def execute_code(request: ExecuteCodeRequest):
+    """Execute code directly (without project context)"""
+    try:
+        import time
+        import tempfile
+        
+        skill_context = get_skill_context(request.skill_level)
+        start_time = time.time()
+        output = ""
+        error = None
+        exit_code = 0
+        
+        # Create temp file and execute
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            if request.language.lower() == "python":
+                file_path = temp_path / "code.py"
+                file_path.write_text(request.code)
+                command = f"python code.py"
+            elif request.language.lower() in ["javascript", "js"]:
+                file_path = temp_path / "code.js"
+                file_path.write_text(request.code)
+                command = f"node code.js"
+            else:
+                raise HTTPException(status_code=400, detail=f"Language {request.language} not supported for direct execution")
+            
+            try:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    cwd=str(temp_path),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    env={**os.environ, 'NODE_ENV': 'development'}
+                )
+                output = result.stdout
+                if result.returncode != 0:
+                    error = result.stderr
+                    exit_code = result.returncode
+            except subprocess.TimeoutExpired:
+                error = "Execution timed out (30 second limit)"
+                exit_code = 124
+            except Exception as e:
+                error = str(e)
+                exit_code = 1
+        
+        execution_time = time.time() - start_time
+        
+        # Get AI explanation if there's an error
+        error_explanation = None
+        fix_suggestion = None
+        
+        if error:
+            system_prompt = f"""You are a coding mentor explaining runtime errors.
+{skill_context}
+Respond ONLY with valid JSON:
+{{
+    "error_explanation": "Clear explanation of what went wrong",
+    "fix_suggestion": "How to fix it"
+}}"""
+            
+            chat = get_chat_instance(system_prompt)
+            user_msg = UserMessage(text=f"""Explain this error to a {request.skill_level} developer:
+Language: {request.language}
+Code: {request.code[:500]}
+Error: {error}""")
+            
+            response = await chat.send_message(user_msg)
+            data = safe_parse_json(response, {})
+            error_explanation = data.get("error_explanation")
+            fix_suggestion = data.get("fix_suggestion")
+        
+        return ExecuteCodeResponse(
+            output=output,
+            error=error,
+            exit_code=exit_code,
+            execution_time=execution_time,
+            error_explanation=error_explanation,
+            fix_suggestion=fix_suggestion
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Execute code error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @api_router.post("/proactive-mentor", response_model=ProactiveMentorResponse)
 async def proactive_mentor(request: ProactiveMentorRequest):
     """Proactively detect issues while coding"""
