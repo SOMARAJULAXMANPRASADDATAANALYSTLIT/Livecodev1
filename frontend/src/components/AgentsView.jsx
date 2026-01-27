@@ -365,7 +365,7 @@ const AgentsView = () => {
             {suggestions.map((s, i) => (
               <button
                 key={i}
-                onClick={() => useSuggestion(s)}
+                onClick={() => handleSuggestionClick(s)}
                 className="px-3 py-1 text-xs rounded-full bg-white/10 hover:bg-white/20 transition-colors"
               >
                 {s}
