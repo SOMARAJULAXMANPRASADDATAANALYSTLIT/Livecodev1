@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { FolderOpen, Upload, Loader2, FileCode, Bug, Play, Terminal, X, Cpu } from "lucide-react";
+import { FolderOpen, Upload, Loader2, FileCode, Play, Terminal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import Editor from "@monaco-editor/react";
 import FileExplorer from "./FileExplorer";
 import LanguageStats from "./LanguageStats";
 import ProjectAnalysisPanel from "./ProjectAnalysisPanel";
@@ -12,7 +11,6 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export default function IDEWorkspace({ project, onNewProject }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileContent, setFileContent] = useState("");
-  const [language, setLanguage] = useState("plaintext");
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [showPanel, setShowPanel] = useState(true);
@@ -42,7 +40,6 @@ export default function IDEWorkspace({ project, onNewProject }) {
       const r = await fetch(`${BACKEND_URL}/api/project/${project.project_id}/file?path=${encodeURIComponent(path)}`);
       const data = await r.json();
       setFileContent(data.content);
-      setLanguage(data.language?.toLowerCase() || "plaintext");
     } catch (e) {
       toast.error("Failed to load file");
     }
@@ -94,7 +91,7 @@ export default function IDEWorkspace({ project, onNewProject }) {
           {loading ? (
             <div className="flex-1 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>
           ) : selectedFile ? (
-            <Editor height="100%" language={language} value={fileContent} theme="vs-dark" options={{ fontSize: 14, minimap: { enabled: false } }} />
+            <pre className="flex-1 p-4 overflow-auto text-sm font-mono bg-[#1e1e1e]">{fileContent}</pre>
           ) : (
             <div className="flex-1 flex items-center justify-center text-white/40"><FileCode className="w-16 h-16" /></div>
           )}
