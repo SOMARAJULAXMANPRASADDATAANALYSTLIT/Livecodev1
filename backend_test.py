@@ -737,14 +737,18 @@ print(result)"""
         print(f"📍 Base URL: {self.base_url}")
         print("=" * 60)
 
-        # Test all endpoints - prioritizing high-priority enhanced features
+        # Test all endpoints - prioritizing review request features
         tests = [
             self.test_health,
-            # Project Upload and Analysis (IDE Tab functionality)
+            # Review Request Features - HIGH PRIORITY
             self.test_project_upload,
+            self.test_project_full_analysis,
+            self.test_agent_visual_generation,
+            self.test_news_feed,
+            self.test_company_analysis,
+            # Other Project/IDE functionality
             self.test_project_file_access,
             self.test_project_run,
-            self.test_project_full_analysis,
             # High priority enhanced features (Code Tab functionality)
             self.test_analyze_code,
             self.test_line_mentoring,
