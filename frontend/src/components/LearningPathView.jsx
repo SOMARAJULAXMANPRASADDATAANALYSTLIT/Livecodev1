@@ -4,7 +4,8 @@ import {
   ChevronRight, ChevronDown, Send, Loader2, Play, CheckCircle2,
   Circle, Clock, BarChart3, BookOpen, Lightbulb, Sparkles,
   User, Briefcase, Code, Stethoscope, Plane, Building,
-  Download, RefreshCw, MessageSquare
+  Download, RefreshCw, MessageSquare, Home, ArrowLeft, Trophy,
+  Flame, Star, Mic, MicOff, Image, X, Zap, TrendingUp
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -23,6 +24,16 @@ const INDUSTRIES = [
   { id: "architecture", name: "Architecture & Design", icon: Building, color: "#9333ea" },
 ];
 
+// Gamification badges
+const BADGES = [
+  { id: "first_topic", name: "First Steps", icon: "🎯", description: "Complete your first topic", xp: 50 },
+  { id: "streak_3", name: "On Fire", icon: "🔥", description: "3-day learning streak", xp: 100 },
+  { id: "streak_7", name: "Dedicated", icon: "⭐", description: "7-day learning streak", xp: 250 },
+  { id: "streak_30", name: "Unstoppable", icon: "🏆", description: "30-day learning streak", xp: 1000 },
+  { id: "fast_learner", name: "Fast Learner", icon: "⚡", description: "Complete 5 topics in a week", xp: 300 },
+  { id: "quiz_master", name: "Quiz Master", icon: "🧠", description: "Score 100% on 10 quizzes", xp: 500 },
+];
+
 const LearningPathView = () => {
   const [phase, setPhase] = useState("onboarding"); // onboarding, roadmap, learning, dashboard
   const [userProfile, setUserProfile] = useState(null);
@@ -34,6 +45,20 @@ const LearningPathView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState({ completed: 0, total: 0, velocity: 0 });
   const messagesEndRef = useRef(null);
+
+  // Gamification state
+  const [xp, setXp] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [badges, setBadges] = useState([]);
+  const [level, setLevel] = useState(1);
+
+  // Voice input state
+  const [isListening, setIsListening] = useState(false);
+  const [recognition, setRecognition] = useState(null);
+
+  // Image input state
+  const [selectedImage, setSelectedImage] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Onboarding state
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -47,6 +72,52 @@ const LearningPathView = () => {
     targetMonths: 12
   });
 
+  // Initialize speech recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognitionInstance = new SpeechRecognition();
+      recognitionInstance.continuous = false;
+      recognitionInstance.interimResults = true;
+      recognitionInstance.lang = 'en-US';
+
+      recognitionInstance.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join('');
+        setInput(transcript);
+      };
+
+      recognitionInstance.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionInstance.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+        toast.error('Voice input error. Please try again.');
+      };
+
+      setRecognition(recognitionInstance);
+    }
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (!recognition) {
+      toast.error('Voice input not supported in this browser');
+      return;
+    }
+
+    if (isListening) {
+      recognition.stop();
+      setIsListening(false);
+    } else {
+      recognition.start();
+      setIsListening(true);
+      toast.info('Listening... Speak now');
+    }
+  };
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -54,6 +125,50 @@ const LearningPathView = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Calculate level from XP
+  useEffect(() => {
+    const newLevel = Math.floor(xp / 500) + 1;
+    if (newLevel !== level) {
+      setLevel(newLevel);
+      if (newLevel > 1) {
+        toast.success(`🎉 Level Up! You're now Level ${newLevel}!`);
+      }
+    }
+  }, [xp, level]);
+
+  const addXp = (amount) => {
+    setXp(prev => prev + amount);
+    toast.success(`+${amount} XP!`, { duration: 1500 });
+  };
+
+  const awardBadge = (badgeId) => {
+    const badge = BADGES.find(b => b.id === badgeId);
+    if (badge && !badges.includes(badgeId)) {
+      setBadges(prev => [...prev, badgeId]);
+      addXp(badge.xp);
+      toast.success(`🏆 Badge Unlocked: ${badge.name}!`);
+    }
+  };
+
+  const resetToHome = () => {
+    setPhase("onboarding");
+    setOnboardingStep(0);
+    setOnboardingData({
+      targetRole: "",
+      industry: "",
+      background: "",
+      hoursPerWeek: 10,
+      learningSpeed: "normal",
+      preferredStyle: "mixed",
+      targetMonths: 12
+    });
+    setUserProfile(null);
+    setSkillTree(null);
+    setWeeklyPlan(null);
+    setCurrentTopic(null);
+    setMessages([]);
+  };
 
   const handleOnboardingComplete = async () => {
     setIsLoading(true);
@@ -72,6 +187,7 @@ const LearningPathView = () => {
       setWeeklyPlan(data.weekly_plan);
       setProgress(data.progress || { completed: 0, total: data.skill_tree?.nodes?.length || 0, velocity: 0 });
       setPhase("roadmap");
+      addXp(100); // XP for starting journey
       toast.success("Learning path created!");
     } catch (error) {
       toast.error("Failed to create learning path");
@@ -86,28 +202,64 @@ const LearningPathView = () => {
     setPhase("learning");
     setMessages([{
       role: "assistant",
-      content: `Let's learn about **${topic.name}**!\n\n${topic.description || "I'll guide you through this topic step by step."}\n\nFeel free to ask questions, and I'll explain concepts at your pace. Ready to begin?`
+      content: `Let's learn about **${topic.name}**!\n\n${topic.description || "I'll guide you through this topic step by step."}\n\nFeel free to ask questions, and I'll explain concepts at your pace. You can:\n- Type your questions\n- Use 🎤 voice input\n- Upload 📷 images for analysis\n\nReady to begin?`
     }]);
   };
 
+  const handleImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage({
+          file,
+          preview: reader.result,
+          base64: reader.result.split(',')[1]
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && !selectedImage) || isLoading) return;
     
-    const userMessage = { role: "user", content: input };
+    const userMessage = { 
+      role: "user", 
+      content: input,
+      image: selectedImage?.preview 
+    };
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = input;
+    const currentImage = selectedImage;
     setInput("");
+    setSelectedImage(null);
     setIsLoading(true);
 
     try {
+      const requestBody = {
+        message: currentInput || "Please analyze this image",
+        topic: currentTopic,
+        user_profile: userProfile,
+        conversation_history: messages.map(m => ({ role: m.role, content: m.content }))
+      };
+
+      // If there's an image, include it
+      if (currentImage) {
+        requestBody.image_base64 = currentImage.base64;
+      }
+
       const response = await fetch(`${BACKEND_URL}/api/learning/mentor`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: input,
-          topic: currentTopic,
-          user_profile: userProfile,
-          conversation_history: messages.map(m => ({ role: m.role, content: m.content }))
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) throw new Error("Failed to get response");
@@ -118,6 +270,8 @@ const LearningPathView = () => {
       if (data.quiz) {
         setMessages(prev => [...prev, { role: "quiz", content: data.quiz }]);
       }
+
+      addXp(10); // XP for asking questions
     } catch (error) {
       toast.error("Failed to get response");
       setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I encountered an error. Please try again." }]);
@@ -141,7 +295,17 @@ const LearningPathView = () => {
           ...prev,
           nodes: prev.nodes.map(n => n.id === topicId ? { ...n, status: "completed" } : n)
         }));
+        
+        addXp(100); // XP for completing topic
+        setStreak(prev => prev + 1);
+        
+        // Check for badges
+        if (progress.completed === 0) awardBadge("first_topic");
+        if (streak + 1 >= 3) awardBadge("streak_3");
+        if (streak + 1 >= 7) awardBadge("streak_7");
+        
         toast.success("Topic completed! Great job!");
+        setPhase("roadmap");
       }
     } catch (error) {
       console.error(error);
@@ -175,6 +339,11 @@ const LearningPathView = () => {
       userProfile={userProfile}
       onStartTopic={startTopic}
       onViewDashboard={() => setPhase("dashboard")}
+      onGoHome={resetToHome}
+      xp={xp}
+      level={level}
+      streak={streak}
+      badges={badges}
     />;
   }
 
@@ -184,6 +353,11 @@ const LearningPathView = () => {
       skillTree={skillTree}
       userProfile={userProfile}
       onBack={() => setPhase("roadmap")}
+      onGoHome={resetToHome}
+      xp={xp}
+      level={level}
+      streak={streak}
+      badges={badges}
     />;
   }
 
@@ -192,6 +366,17 @@ const LearningPathView = () => {
     <div className="h-[calc(100vh-120px)] flex gap-4">
       {/* Left sidebar - Topic info */}
       <div className="w-72 shrink-0 glass-heavy rounded-2xl p-4 flex flex-col">
+        {/* Home button */}
+        <Button 
+          onClick={resetToHome}
+          variant="ghost" 
+          size="sm" 
+          className="mb-4 text-white/60 hover:text-white"
+        >
+          <Home className="w-4 h-4 mr-2" />
+          Choose Another Career
+        </Button>
+
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-[#667eea]/20 flex items-center justify-center">
             <BookOpen className="w-5 h-5 text-[#667eea]" />
@@ -208,6 +393,21 @@ const LearningPathView = () => {
             <span className="text-[#34A853]">{currentTopic?.understanding || 0}%</span>
           </div>
           <Progress value={currentTopic?.understanding || 0} className="h-2" />
+        </div>
+
+        {/* Gamification stats */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="p-2 glass-light rounded-lg text-center">
+            <div className="text-lg font-bold text-[#FBBC04]">{xp}</div>
+            <div className="text-xs text-white/50">XP</div>
+          </div>
+          <div className="p-2 glass-light rounded-lg text-center">
+            <div className="text-lg font-bold text-[#EA4335] flex items-center justify-center gap-1">
+              <Flame className="w-4 h-4" />
+              {streak}
+            </div>
+            <div className="text-xs text-white/50">Streak</div>
+          </div>
         </div>
 
         <div className="space-y-2 text-sm">
@@ -234,13 +434,14 @@ const LearningPathView = () => {
             className="w-full bg-[#34A853] hover:bg-[#34A853]/80"
           >
             <CheckCircle2 className="w-4 h-4 mr-2" />
-            Mark as Complete
+            Mark as Complete (+100 XP)
           </Button>
           <Button 
             onClick={() => setPhase("roadmap")}
             variant="outline"
             className="w-full border-white/20"
           >
+            <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Roadmap
           </Button>
         </div>
@@ -248,13 +449,21 @@ const LearningPathView = () => {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col glass-heavy rounded-2xl overflow-hidden">
-        <div className="p-4 border-b border-white/10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#667eea] to-[#764ba2] flex items-center justify-center">
-            <Brain className="w-5 h-5 text-white" />
+        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#667eea] to-[#764ba2] flex items-center justify-center">
+              <Brain className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-semibold">AI Learning Mentor</h3>
+              <p className="text-xs text-white/50">Interactive tutoring session</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-semibold">AI Learning Mentor</h3>
-            <p className="text-xs text-white/50">Interactive tutoring session</p>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1 glass-light rounded-full text-xs flex items-center gap-1">
+              <Zap className="w-3 h-3 text-[#FBBC04]" />
+              Level {level}
+            </div>
           </div>
         </div>
 
@@ -271,16 +480,62 @@ const LearningPathView = () => {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Image preview */}
+        {selectedImage && (
+          <div className="px-4 pb-2">
+            <div className="relative inline-block">
+              <img 
+                src={selectedImage.preview} 
+                alt="Upload preview" 
+                className="h-20 rounded-lg border border-white/20"
+              />
+              <button 
+                onClick={removeImage}
+                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center"
+              >
+                <X className="w-3 h-3 text-white" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="p-4 border-t border-white/10">
           <div className="flex gap-2">
+            {/* Voice input button */}
+            <Button
+              onClick={toggleVoiceInput}
+              variant="outline"
+              size="icon"
+              className={`border-white/20 ${isListening ? 'bg-red-500/20 border-red-500' : ''}`}
+            >
+              {isListening ? <MicOff className="w-4 h-4 text-red-500" /> : <Mic className="w-4 h-4" />}
+            </Button>
+
+            {/* Image upload button */}
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              variant="outline"
+              size="icon"
+              className="border-white/20"
+            >
+              <Image className="w-4 h-4" />
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask a question or explain back what you learned..."
+              placeholder={isListening ? "Listening..." : "Ask a question or explain back what you learned..."}
               className="flex-1 min-h-[60px] max-h-[150px] bg-white/5 border-white/10"
             />
-            <Button onClick={sendMessage} disabled={isLoading || !input.trim()} className="px-4 bg-[#667eea]">
+            <Button onClick={sendMessage} disabled={isLoading || (!input.trim() && !selectedImage)} className="px-4 bg-[#667eea]">
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </Button>
           </div>
@@ -302,6 +557,9 @@ const OnboardingPhase = ({ step, setStep, data, setData, onComplete, isLoading }
   const updateData = (key, value) => {
     setData(prev => ({ ...prev, [key]: value }));
   };
+
+  // Check if step 0 can continue - either has targetRole OR has industry selected
+  const canContinueStep0 = data.industry !== "";
 
   return (
     <div className="h-[calc(100vh-120px)] flex items-center justify-center">
@@ -337,7 +595,7 @@ const OnboardingPhase = ({ step, setStep, data, setData, onComplete, isLoading }
                 type="text"
                 value={data.targetRole}
                 onChange={(e) => updateData("targetRole", e.target.value)}
-                placeholder="e.g., AI Engineer, Data Scientist, Product Manager..."
+                placeholder="e.g., AI Engineer, Data Scientist, Product Manager... (optional)"
                 className="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-[#667eea]"
               />
               <p className="text-sm text-white/50 text-center">Select an industry:</p>
@@ -347,7 +605,21 @@ const OnboardingPhase = ({ step, setStep, data, setData, onComplete, isLoading }
                   return (
                     <button
                       key={ind.id}
-                      onClick={() => updateData("industry", ind.id)}
+                      onClick={() => {
+                        updateData("industry", ind.id);
+                        // Auto-fill targetRole if empty
+                        if (!data.targetRole) {
+                          const defaultRoles = {
+                            software: "Software Engineer",
+                            data: "Data Analyst",
+                            business: "Business Analyst",
+                            healthcare: "Healthcare Professional",
+                            travel: "Travel Specialist",
+                            architecture: "Architect"
+                          };
+                          updateData("targetRole", defaultRoles[ind.id] || ind.name);
+                        }
+                      }}
                       className={`p-4 rounded-xl border transition-all flex items-center gap-3 ${
                         data.industry === ind.id 
                           ? "border-[#667eea] bg-[#667eea]/10" 
@@ -368,7 +640,7 @@ const OnboardingPhase = ({ step, setStep, data, setData, onComplete, isLoading }
               <textarea
                 value={data.background}
                 onChange={(e) => updateData("background", e.target.value)}
-                placeholder="Describe your current skills, education, and experience..."
+                placeholder="Describe your current skills, education, and experience... (optional - helps personalize your path)"
                 rows={6}
                 className="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-[#667eea] resize-none"
               />
@@ -477,12 +749,13 @@ const OnboardingPhase = ({ step, setStep, data, setData, onComplete, isLoading }
             disabled={step === 0}
             className="border-white/20"
           >
+            <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
           {step < 3 ? (
             <Button
               onClick={() => setStep(step + 1)}
-              disabled={step === 0 && !data.targetRole}
+              disabled={step === 0 && !canContinueStep0}
               className="bg-[#667eea]"
             >
               Continue
@@ -514,7 +787,7 @@ const OnboardingPhase = ({ step, setStep, data, setData, onComplete, isLoading }
 };
 
 // Roadmap Phase Component
-const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTopic, onViewDashboard }) => {
+const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTopic, onViewDashboard, onGoHome, xp, level, streak, badges }) => {
   const [expandedNodes, setExpandedNodes] = useState(new Set(["root"]));
 
   const toggleNode = (nodeId) => {
@@ -584,18 +857,61 @@ const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTop
       <div className="flex-1 glass-heavy rounded-2xl p-6 overflow-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#667eea]/20 flex items-center justify-center">
-              <TreePine className="w-5 h-5 text-[#667eea]" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold">Learning Roadmap</h2>
-              <p className="text-xs text-white/50">{userProfile?.targetRole}</p>
-            </div>
+            <Button 
+              onClick={onGoHome}
+              variant="ghost" 
+              size="sm"
+              className="text-white/60 hover:text-white"
+            >
+              <Home className="w-4 h-4 mr-2" />
+              Change Career
+            </Button>
           </div>
-          <Button onClick={onViewDashboard} variant="outline" className="border-white/20">
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Dashboard
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={onViewDashboard} variant="outline" className="border-white/20">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Dashboard
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-lg bg-[#667eea]/20 flex items-center justify-center">
+            <TreePine className="w-5 h-5 text-[#667eea]" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold">Learning Roadmap</h2>
+            <p className="text-xs text-white/50">{userProfile?.targetRole}</p>
+          </div>
+        </div>
+
+        {/* Gamification bar */}
+        <div className="grid grid-cols-4 gap-3 mb-6">
+          <div className="p-3 glass-light rounded-xl text-center">
+            <div className="flex items-center justify-center gap-1 text-lg font-bold text-[#667eea]">
+              <Zap className="w-4 h-4" />
+              {level}
+            </div>
+            <div className="text-xs text-white/50">Level</div>
+          </div>
+          <div className="p-3 glass-light rounded-xl text-center">
+            <div className="text-lg font-bold text-[#FBBC04]">{xp}</div>
+            <div className="text-xs text-white/50">XP</div>
+          </div>
+          <div className="p-3 glass-light rounded-xl text-center">
+            <div className="flex items-center justify-center gap-1 text-lg font-bold text-[#EA4335]">
+              <Flame className="w-4 h-4" />
+              {streak}
+            </div>
+            <div className="text-xs text-white/50">Streak</div>
+          </div>
+          <div className="p-3 glass-light rounded-xl text-center">
+            <div className="flex items-center justify-center gap-1 text-lg font-bold text-[#34A853]">
+              <Trophy className="w-4 h-4" />
+              {badges.length}
+            </div>
+            <div className="text-xs text-white/50">Badges</div>
+          </div>
         </div>
 
         {/* Progress bar */}
@@ -641,13 +957,19 @@ const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTop
                 <div className="font-medium text-sm">{task.title}</div>
                 <div className="text-xs text-white/50 mt-1">{task.description}</div>
                 {task.type === "reading" && (
-                  <div className="text-xs text-[#4285F4] mt-2">📖 Reading</div>
+                  <div className="text-xs text-[#4285F4] mt-2 flex items-center gap-1">
+                    <BookOpen className="w-3 h-3" /> Reading
+                  </div>
                 )}
                 {task.type === "practice" && (
-                  <div className="text-xs text-[#34A853] mt-2">💻 Practice</div>
+                  <div className="text-xs text-[#34A853] mt-2 flex items-center gap-1">
+                    <Code className="w-3 h-3" /> Practice
+                  </div>
                 )}
                 {task.type === "project" && (
-                  <div className="text-xs text-[#9333ea] mt-2">🚀 Project</div>
+                  <div className="text-xs text-[#9333ea] mt-2 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> Project
+                  </div>
                 )}
               </div>
             </div>
@@ -658,7 +980,7 @@ const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTop
           <div className="mt-6">
             <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
               <Award className="w-4 h-4 text-[#EA4335]" />
-              Homework
+              Homework (+50 XP)
             </h3>
             <div className="p-4 border border-[#EA4335]/30 bg-[#EA4335]/5 rounded-xl">
               <p className="text-sm">{weeklyPlan.homework.description}</p>
@@ -668,13 +990,38 @@ const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTop
             </div>
           </div>
         )}
+
+        {/* Badges section */}
+        {badges.length > 0 && (
+          <div className="mt-6">
+            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-[#FBBC04]" />
+              Your Badges
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {badges.map(badgeId => {
+                const badge = BADGES.find(b => b.id === badgeId);
+                return badge ? (
+                  <div 
+                    key={badgeId}
+                    className="px-3 py-2 glass-light rounded-lg text-center"
+                    title={badge.description}
+                  >
+                    <div className="text-2xl">{badge.icon}</div>
+                    <div className="text-xs mt-1">{badge.name}</div>
+                  </div>
+                ) : null;
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 // Dashboard Phase Component
-const DashboardPhase = ({ progress, skillTree, userProfile, onBack }) => {
+const DashboardPhase = ({ progress, skillTree, userProfile, onBack, onGoHome, xp, level, streak, badges }) => {
   const completedTopics = skillTree?.nodes?.filter(n => n.status === "completed").length || 0;
   const totalTopics = skillTree?.nodes?.length || 1;
 
@@ -683,8 +1030,12 @@ const DashboardPhase = ({ progress, skillTree, userProfile, onBack }) => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Button onClick={onBack} variant="ghost" size="sm">
-            <ChevronRight className="w-4 h-4 rotate-180 mr-1" />
+            <ArrowLeft className="w-4 h-4 mr-1" />
             Back to Roadmap
+          </Button>
+          <Button onClick={onGoHome} variant="ghost" size="sm" className="text-white/60">
+            <Home className="w-4 h-4 mr-1" />
+            Change Career
           </Button>
         </div>
       </div>
@@ -699,23 +1050,23 @@ const DashboardPhase = ({ progress, skillTree, userProfile, onBack }) => {
           color="#34A853" 
         />
         <StatCard 
-          icon={Clock} 
-          label="Hours Studied" 
-          value={Math.round(completedTopics * 2)} 
-          suffix="hrs"
+          icon={Zap} 
+          label="Current Level" 
+          value={level} 
+          suffix=""
           color="#667eea" 
         />
         <StatCard 
-          icon={BarChart3} 
-          label="Weekly Velocity" 
-          value={progress.velocity || 0} 
-          suffix="topics/wk"
+          icon={TrendingUp} 
+          label="Total XP" 
+          value={xp} 
+          suffix="xp"
           color="#FBBC04" 
         />
         <StatCard 
-          icon={Award} 
+          icon={Flame} 
           label="Current Streak" 
-          value={7} 
+          value={streak} 
           suffix="days"
           color="#EA4335" 
         />
@@ -746,25 +1097,26 @@ const DashboardPhase = ({ progress, skillTree, userProfile, onBack }) => {
 
         <div className="glass-heavy rounded-2xl p-6">
           <h3 className="font-bold mb-4 flex items-center gap-2">
-            <Lightbulb className="w-5 h-5 text-[#FBBC04]" />
-            Learning Insights
+            <Trophy className="w-5 h-5 text-[#FBBC04]" />
+            Badges Earned ({badges.length}/{BADGES.length})
           </h3>
-          <div className="space-y-4">
-            <InsightCard 
-              title="Strongest Area" 
-              value="Programming Fundamentals" 
-              trend="up"
-            />
-            <InsightCard 
-              title="Needs Practice" 
-              value="Data Structures" 
-              trend="down"
-            />
-            <InsightCard 
-              title="Recommended Focus" 
-              value="Complete Python Functions module" 
-              trend="neutral"
-            />
+          <div className="grid grid-cols-3 gap-3">
+            {BADGES.map(badge => {
+              const earned = badges.includes(badge.id);
+              return (
+                <div 
+                  key={badge.id}
+                  className={`p-3 rounded-xl text-center transition-all ${
+                    earned ? 'glass-light' : 'opacity-30'
+                  }`}
+                  title={badge.description}
+                >
+                  <div className="text-3xl mb-1">{badge.icon}</div>
+                  <div className="text-xs font-medium">{badge.name}</div>
+                  <div className="text-xs text-white/50">+{badge.xp} XP</div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -804,6 +1156,13 @@ const MessageBubble = ({ message }) => {
       <div className={`max-w-[80%] p-4 rounded-2xl ${
         isUser ? 'bg-[#667eea] text-white' : 'glass-light'
       }`}>
+        {message.image && (
+          <img 
+            src={message.image} 
+            alt="User upload" 
+            className="max-h-40 rounded-lg mb-2"
+          />
+        )}
         <div className="prose prose-invert prose-sm max-w-none">
           <ReactMarkdown>{message.content}</ReactMarkdown>
         </div>
@@ -825,13 +1184,6 @@ const StatCard = ({ icon: Icon, label, value, total, suffix, color }) => (
       {total && <span className="text-lg text-white/40">/{total}</span>}
       {suffix && <span className="text-lg text-white/40 ml-1">{suffix}</span>}
     </div>
-  </div>
-);
-
-const InsightCard = ({ title, value, trend }) => (
-  <div className="p-4 glass-light rounded-xl">
-    <div className="text-xs text-white/50 mb-1">{title}</div>
-    <div className="font-medium text-sm">{value}</div>
   </div>
 );
 
