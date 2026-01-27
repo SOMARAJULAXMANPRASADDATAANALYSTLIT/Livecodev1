@@ -208,7 +208,7 @@ const AgentsView = () => {
     }
   };
 
-  const useSuggestion = (suggestion) => {
+  const handleSuggestionClick = (suggestion) => {
     setInput(suggestion);
   };
 
