@@ -448,18 +448,65 @@ const AgentsView = () => {
 
         {/* Input Area */}
         <div className="p-4 border-t border-white/10">
+          {/* Image preview */}
+          {selectedImage && (
+            <div className="mb-2">
+              <div className="relative inline-block">
+                <img 
+                  src={selectedImage.preview} 
+                  alt="Upload preview" 
+                  className="h-16 rounded-lg border border-white/20"
+                />
+                <button 
+                  onClick={removeImage}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center"
+                >
+                  <X className="w-3 h-3 text-white" />
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
+            {/* Voice input button */}
+            <Button
+              onClick={toggleVoiceInput}
+              variant="outline"
+              size="icon"
+              className={`border-white/20 shrink-0 ${isListening ? 'bg-red-500/20 border-red-500' : ''}`}
+              data-testid="voice-input-btn"
+            >
+              {isListening ? <MicOff className="w-4 h-4 text-red-500" /> : <Mic className="w-4 h-4" />}
+            </Button>
+
+            {/* Image upload button */}
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              variant="outline"
+              size="icon"
+              className="border-white/20 shrink-0"
+              data-testid="image-upload-btn"
+            >
+              <Image className="w-4 h-4" />
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={`Ask ${agent?.name}...`}
+              placeholder={isListening ? "Listening..." : `Ask ${agent?.name}...`}
               className="flex-1 min-h-[60px] max-h-[150px] bg-white/5 border-white/10"
               data-testid="agent-input"
             />
             <Button
               onClick={sendMessage}
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || (!input.trim() && !selectedImage)}
               className="px-4"
               style={{ backgroundColor: agent?.color }}
               data-testid="agent-send-btn"
