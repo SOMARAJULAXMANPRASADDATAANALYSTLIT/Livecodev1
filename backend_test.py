@@ -68,6 +68,139 @@ class LiveCodeMentorTester:
             self.failed_tests.append({"test": name, "error": str(e)})
             return False, {}
 
+    def create_test_zip_project(self):
+        """Create a test ZIP file with a simple Python project"""
+        # Create a temporary directory for the project
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = os.path.join(temp_dir, "test_project")
+            os.makedirs(project_dir)
+            
+            # Create main.py
+            main_py_content = """def calculate_factorial(n):
+    if n < 0:
+        return None
+    elif n == 0 or n == 1:
+        return 1
+    else:
+        result = 1
+        for i in range(2, n + 1):
+            result *= i
+        return result
+
+def main():
+    number = 5
+    factorial = calculate_factorial(number)
+    print(f"Factorial of {number} is {factorial}")
+
+if __name__ == "__main__":
+    main()
+"""
+            with open(os.path.join(project_dir, "main.py"), "w") as f:
+                f.write(main_py_content)
+            
+            # Create utils.py with a bug
+            utils_py_content = """def divide_numbers(a, b):
+    # This function has a potential division by zero bug
+    return a / b
+
+def get_average(numbers):
+    # This function has a bug when numbers list is empty
+    total = sum(numbers)
+    return total / len(numbers)
+
+def process_data(data_list):
+    results = []
+    for item in data_list:
+        if item > 0:
+            results.append(divide_numbers(item, 2))
+    return results
+"""
+            with open(os.path.join(project_dir, "utils.py"), "w") as f:
+                f.write(utils_py_content)
+            
+            # Create README.md
+            readme_content = """# Test Project
+
+This is a simple test project for the Live Code Mentor IDE.
+
+## Features
+- Factorial calculation
+- Utility functions for mathematical operations
+- Example of common programming patterns
+
+## Usage
+Run `python main.py` to see the factorial calculation in action.
+"""
+            with open(os.path.join(project_dir, "README.md"), "w") as f:
+                f.write(readme_content)
+            
+            # Create requirements.txt
+            requirements_content = """# No external dependencies for this simple project
+"""
+            with open(os.path.join(project_dir, "requirements.txt"), "w") as f:
+                f.write(requirements_content)
+            
+            # Create ZIP file
+            zip_buffer = BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for root, dirs, files in os.walk(project_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        arc_name = os.path.relpath(file_path, temp_dir)
+                        zip_file.write(file_path, arc_name)
+            
+            zip_buffer.seek(0)
+            return zip_buffer.getvalue()
+
+    def run_test_with_files(self, name, method, endpoint, expected_status, files=None, data=None, timeout=30):
+        """Run a test with file upload support"""
+        url = f"{self.base_url}/api/{endpoint}"
+        
+        self.tests_run += 1
+        print(f"\n🔍 Testing {name}...")
+        print(f"   URL: {url}")
+        
+        try:
+            if method == 'POST' and files:
+                response = requests.post(url, files=files, data=data, timeout=timeout)
+            elif method == 'GET':
+                response = requests.get(url, timeout=timeout)
+            elif method == 'POST':
+                headers = {'Content-Type': 'application/json'}
+                response = requests.post(url, json=data, headers=headers, timeout=timeout)
+            else:
+                response = requests.request(method, url, json=data, timeout=timeout)
+
+            success = response.status_code == expected_status
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                try:
+                    response_data = response.json()
+                    print(f"   Response keys: {list(response_data.keys()) if isinstance(response_data, dict) else 'Non-dict response'}")
+                except:
+                    print("   Response: Non-JSON or empty")
+            else:
+                self.failed_tests.append({
+                    "test": name,
+                    "expected": expected_status,
+                    "actual": response.status_code,
+                    "response": response.text[:200] if response.text else "Empty response"
+                })
+                print(f"❌ Failed - Expected {expected_status}, got {response.status_code}")
+                print(f"   Response: {response.text[:200]}")
+
+            return success, response.json() if success and response.text else {}
+
+        except requests.exceptions.Timeout:
+            print(f"❌ Failed - Timeout after {timeout}s")
+            self.failed_tests.append({"test": name, "error": "Timeout"})
+            return False, {}
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            self.failed_tests.append({"test": name, "error": str(e)})
+            return False, {}
+
     def create_test_image(self):
         """Create a simple test image in base64 format"""
         # Create a simple test image with some content
