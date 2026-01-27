@@ -1660,11 +1660,13 @@ async def agent_chat(request: AgentChatRequest):
         # Generate suggestions based on agent type
         suggestions = None
         if request.agent_type == "health":
-            suggestions = ["Explain in simpler terms", "Show a timeline", "What are the symptoms?"]
+            suggestions = ["Explain in simpler terms", "Show a timeline", "Generate visual diagram"]
         elif request.agent_type == "travel":
-            suggestions = ["Show day-by-day itinerary", "Best restaurants?", "Local customs?"]
+            suggestions = ["Show day-by-day itinerary", "Best restaurants?", "Generate trip map"]
         elif request.agent_type == "business":
-            suggestions = ["Competitor analysis", "Generate HTML report", "Show pricing model"]
+            suggestions = ["Competitor analysis", "Generate HTML report", "Generate visual chart"]
+        elif request.agent_type == "coding":
+            suggestions = ["Show flowchart", "Generate architecture diagram", "Explain with visuals"]
         
         return AgentChatResponse(
             response=response or "I'm here to help!",
@@ -1678,6 +1680,65 @@ async def agent_chat(request: AgentChatRequest):
     except Exception as e:
         logger.error(f"Agent chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/agent/generate-visual")
+async def generate_agent_visual(
+    agent_type: str = Form(...),
+    topic: str = Form(...),
+    visual_type: str = Form("diagram")
+):
+    """Generate visual diagram/image for agent response"""
+    try:
+        from emergentintegrations.llm.nano_banana import ImageGeneration
+        
+        # Create appropriate prompts based on agent type
+        prompt_templates = {
+            "coding": {
+                "diagram": f"Technical architecture diagram showing {topic}. Clean, professional software engineering diagram style with labeled components and connections. Dark theme, modern design.",
+                "flowchart": f"Software flowchart for {topic}. Clear decision points, process steps, color coded. Professional technical documentation style.",
+                "architecture": f"System architecture diagram for {topic}. Microservices, APIs, databases clearly labeled. Modern cloud architecture visualization."
+            },
+            "health": {
+                "diagram": f"Medical educational diagram showing {topic}. Clean, labeled, professional medical illustration. Anatomically accurate with clear annotations.",
+                "anatomy": f"Human anatomy illustration of {topic}. Educational medical style, clearly labeled parts.",
+                "timeline": f"Medical timeline showing progression of {topic}. Clear stages, visual markers, educational style."
+            },
+            "travel": {
+                "diagram": f"Travel route map for {topic}. Beautiful illustrated map style with landmarks, routes, and key destinations marked.",
+                "map": f"Illustrated travel map of {topic}. Tourist map style with attractions, routes, and helpful icons.",
+                "itinerary": f"Visual travel itinerary for {topic}. Day-by-day visual guide with icons and timeline."
+            },
+            "business": {
+                "diagram": f"Business strategy diagram for {topic}. Professional consulting style with clear hierarchy and relationships.",
+                "chart": f"Business analysis chart for {topic}. Clean data visualization, modern corporate style.",
+                "comparison": f"Competitive analysis visual comparison of {topic}. Side by side with clear differentiators."
+            }
+        }
+        
+        agent_prompts = prompt_templates.get(agent_type, prompt_templates["coding"])
+        prompt = agent_prompts.get(visual_type, agent_prompts.get("diagram", f"Educational diagram for {topic}"))
+        
+        # Generate image using Nano Banana
+        image_gen = ImageGeneration(api_key=EMERGENT_LLM_KEY)
+        result = await image_gen.generate(
+            prompt=prompt,
+            aspect_ratio="16:9"
+        )
+        
+        return {
+            "success": True,
+            "image_url": result.url if hasattr(result, 'url') else None,
+            "image_base64": result.base64 if hasattr(result, 'base64') else None,
+            "topic": topic,
+            "visual_type": visual_type,
+            "agent_type": agent_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Visual generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @api_router.post("/agent/health/explain")
 async def health_explain(request: HealthExplainRequest):
