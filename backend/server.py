@@ -1851,6 +1851,7 @@ class LearningMentorRequest(BaseModel):
     topic: Optional[Dict[str, Any]] = None
     user_profile: Optional[Dict[str, Any]] = None
     conversation_history: List[ChatMessage] = []
+    image_base64: Optional[str] = None  # Support for image input
 
 class TopicCompleteRequest(BaseModel):
     topic_id: str
