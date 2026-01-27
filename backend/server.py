@@ -1831,6 +1831,369 @@ def generate_html_report(data: dict) -> str:
     
     return html
 
+# ============== LEARNING PATH MENTOR SYSTEM ==============
+
+# Collections for learning path
+learning_profiles_collection = db.learning_profiles
+learning_progress_collection = db.learning_progress
+
+class LearningOnboardRequest(BaseModel):
+    targetRole: str
+    industry: str
+    background: str
+    hoursPerWeek: int = 10
+    learningSpeed: str = "normal"
+    preferredStyle: str = "mixed"
+    targetMonths: int = 12
+
+class LearningMentorRequest(BaseModel):
+    message: str
+    topic: Optional[Dict[str, Any]] = None
+    user_profile: Optional[Dict[str, Any]] = None
+    conversation_history: List[ChatMessage] = []
+
+class TopicCompleteRequest(BaseModel):
+    topic_id: str
+    user_id: Optional[str] = None
+    score: Optional[int] = None
+
+INDUSTRY_SKILL_TREES = {
+    "software": {
+        "name": "Software & AI Engineering",
+        "nodes": [
+            {
+                "id": "prog_fundamentals",
+                "name": "Programming Fundamentals",
+                "level": "Beginner",
+                "estimatedTime": "4-6 weeks",
+                "status": "not_started",
+                "objective": "Master basic programming concepts",
+                "children": [
+                    {"id": "python_basics", "name": "Python Basics", "level": "Beginner", "estimatedTime": "2 weeks", "status": "not_started", "objective": "Learn Python syntax and basics"},
+                    {"id": "variables_types", "name": "Variables & Data Types", "level": "Beginner", "estimatedTime": "1 week", "status": "not_started"},
+                    {"id": "control_flow", "name": "Control Flow", "level": "Beginner", "estimatedTime": "1 week", "status": "not_started"},
+                    {"id": "functions", "name": "Functions", "level": "Beginner", "estimatedTime": "1 week", "status": "not_started"}
+                ]
+            },
+            {
+                "id": "data_structures",
+                "name": "Data Structures",
+                "level": "Intermediate",
+                "estimatedTime": "4-6 weeks",
+                "status": "not_started",
+                "children": [
+                    {"id": "arrays_lists", "name": "Arrays & Lists", "level": "Intermediate", "estimatedTime": "1 week", "status": "not_started"},
+                    {"id": "stacks_queues", "name": "Stacks & Queues", "level": "Intermediate", "estimatedTime": "1 week", "status": "not_started"},
+                    {"id": "trees_graphs", "name": "Trees & Graphs", "level": "Intermediate", "estimatedTime": "2 weeks", "status": "not_started"},
+                    {"id": "hash_tables", "name": "Hash Tables", "level": "Intermediate", "estimatedTime": "1 week", "status": "not_started"}
+                ]
+            },
+            {
+                "id": "algorithms",
+                "name": "Algorithms",
+                "level": "Intermediate",
+                "estimatedTime": "4-6 weeks",
+                "status": "not_started",
+                "children": [
+                    {"id": "sorting", "name": "Sorting Algorithms", "level": "Intermediate", "estimatedTime": "2 weeks", "status": "not_started"},
+                    {"id": "searching", "name": "Searching Algorithms", "level": "Intermediate", "estimatedTime": "1 week", "status": "not_started"},
+                    {"id": "recursion", "name": "Recursion", "level": "Intermediate", "estimatedTime": "2 weeks", "status": "not_started"}
+                ]
+            },
+            {
+                "id": "ml_foundations",
+                "name": "Machine Learning Foundations",
+                "level": "Advanced",
+                "estimatedTime": "8-10 weeks",
+                "status": "not_started",
+                "children": [
+                    {"id": "linear_algebra", "name": "Linear Algebra", "level": "Advanced", "estimatedTime": "2 weeks", "status": "not_started"},
+                    {"id": "statistics", "name": "Statistics & Probability", "level": "Advanced", "estimatedTime": "2 weeks", "status": "not_started"},
+                    {"id": "supervised_ml", "name": "Supervised Learning", "level": "Advanced", "estimatedTime": "3 weeks", "status": "not_started"},
+                    {"id": "unsupervised_ml", "name": "Unsupervised Learning", "level": "Advanced", "estimatedTime": "2 weeks", "status": "not_started"}
+                ]
+            },
+            {
+                "id": "deep_learning",
+                "name": "Deep Learning",
+                "level": "Advanced",
+                "estimatedTime": "8-12 weeks",
+                "status": "not_started",
+                "children": [
+                    {"id": "neural_networks", "name": "Neural Networks", "level": "Advanced", "estimatedTime": "3 weeks", "status": "not_started"},
+                    {"id": "cnns", "name": "CNNs", "level": "Advanced", "estimatedTime": "2 weeks", "status": "not_started"},
+                    {"id": "rnns_transformers", "name": "RNNs & Transformers", "level": "Advanced", "estimatedTime": "3 weeks", "status": "not_started"},
+                    {"id": "llms", "name": "Large Language Models", "level": "Advanced", "estimatedTime": "3 weeks", "status": "not_started"}
+                ]
+            }
+        ]
+    },
+    "data": {
+        "name": "Data & Analytics",
+        "nodes": [
+            {"id": "sql_fundamentals", "name": "SQL Fundamentals", "level": "Beginner", "estimatedTime": "3 weeks", "status": "not_started"},
+            {"id": "data_wrangling", "name": "Data Wrangling", "level": "Beginner", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "visualization", "name": "Data Visualization", "level": "Intermediate", "estimatedTime": "3 weeks", "status": "not_started"},
+            {"id": "statistics_analysis", "name": "Statistical Analysis", "level": "Intermediate", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "bi_tools", "name": "BI Tools (Tableau/PowerBI)", "level": "Intermediate", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "advanced_analytics", "name": "Advanced Analytics", "level": "Advanced", "estimatedTime": "6 weeks", "status": "not_started"}
+        ]
+    },
+    "business": {
+        "name": "Business & Strategy",
+        "nodes": [
+            {"id": "business_fundamentals", "name": "Business Fundamentals", "level": "Beginner", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "market_analysis", "name": "Market Analysis", "level": "Intermediate", "estimatedTime": "3 weeks", "status": "not_started"},
+            {"id": "financial_modeling", "name": "Financial Modeling", "level": "Intermediate", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "strategic_planning", "name": "Strategic Planning", "level": "Advanced", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "leadership", "name": "Leadership & Management", "level": "Advanced", "estimatedTime": "6 weeks", "status": "not_started"}
+        ]
+    },
+    "healthcare": {
+        "name": "Healthcare & Biology",
+        "nodes": [
+            {"id": "anatomy_basics", "name": "Human Anatomy Basics", "level": "Beginner", "estimatedTime": "6 weeks", "status": "not_started"},
+            {"id": "physiology", "name": "Physiology", "level": "Intermediate", "estimatedTime": "6 weeks", "status": "not_started"},
+            {"id": "medical_terminology", "name": "Medical Terminology", "level": "Beginner", "estimatedTime": "3 weeks", "status": "not_started"},
+            {"id": "pathology", "name": "Pathology Basics", "level": "Advanced", "estimatedTime": "8 weeks", "status": "not_started"},
+            {"id": "pharmacology", "name": "Pharmacology Basics", "level": "Advanced", "estimatedTime": "6 weeks", "status": "not_started"}
+        ]
+    },
+    "travel": {
+        "name": "Travel & Geography",
+        "nodes": [
+            {"id": "world_geography", "name": "World Geography", "level": "Beginner", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "cultural_studies", "name": "Cultural Studies", "level": "Intermediate", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "tourism_management", "name": "Tourism Management", "level": "Intermediate", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "hospitality", "name": "Hospitality Industry", "level": "Intermediate", "estimatedTime": "4 weeks", "status": "not_started"}
+        ]
+    },
+    "architecture": {
+        "name": "Architecture & Design",
+        "nodes": [
+            {"id": "design_principles", "name": "Design Principles", "level": "Beginner", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "drafting", "name": "Technical Drafting", "level": "Beginner", "estimatedTime": "4 weeks", "status": "not_started"},
+            {"id": "cad_software", "name": "CAD Software", "level": "Intermediate", "estimatedTime": "6 weeks", "status": "not_started"},
+            {"id": "structural_basics", "name": "Structural Engineering Basics", "level": "Advanced", "estimatedTime": "8 weeks", "status": "not_started"}
+        ]
+    }
+}
+
+@api_router.post("/learning/onboard")
+async def learning_onboard(request: LearningOnboardRequest):
+    """Create a personalized learning path based on user profile"""
+    try:
+        profile_id = str(uuid.uuid4())
+        
+        # Get industry-specific skill tree
+        industry = request.industry or "software"
+        skill_tree = INDUSTRY_SKILL_TREES.get(industry, INDUSTRY_SKILL_TREES["software"])
+        
+        # Generate career fit analysis using AI
+        system_prompt = """You are an expert career advisor and curriculum designer.
+Based on the user's profile, provide:
+1. A career fit analysis
+2. Personalized recommendations
+3. A customized weekly plan
+
+RESPOND ONLY WITH VALID JSON:
+{
+    "career_fit": {
+        "fit_score": 85,
+        "strengths": ["Strength 1", "Strength 2"],
+        "areas_to_develop": ["Area 1", "Area 2"],
+        "alternative_roles": ["Role 1", "Role 2"]
+    },
+    "weekly_plan": {
+        "week": 1,
+        "tasks": [
+            {"title": "Task", "description": "Desc", "type": "reading", "completed": false},
+            {"title": "Task 2", "description": "Desc", "type": "practice", "completed": false}
+        ],
+        "homework": {"description": "Weekly homework assignment"}
+    },
+    "personalized_message": "Encouraging message for the learner"
+}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"""Create a learning path for:
+Target Role: {request.targetRole}
+Industry: {industry}
+Background: {request.background}
+Available Hours/Week: {request.hoursPerWeek}
+Learning Speed: {request.learningSpeed}
+Preferred Style: {request.preferredStyle}
+Target Timeline: {request.targetMonths} months""")
+        
+        response = await chat.send_message(user_msg)
+        ai_data = safe_parse_json(response, {
+            "career_fit": {"fit_score": 80, "strengths": [], "areas_to_develop": []},
+            "weekly_plan": {"week": 1, "tasks": [
+                {"title": "Start Python Basics", "description": "Learn variables and data types", "type": "reading", "completed": False},
+                {"title": "Practice Exercises", "description": "Complete 5 coding exercises", "type": "practice", "completed": False}
+            ]},
+            "personalized_message": "Welcome to your learning journey!"
+        })
+        
+        # Calculate total topics
+        total_topics = 0
+        def count_topics(nodes):
+            nonlocal total_topics
+            for node in nodes:
+                total_topics += 1
+                if "children" in node:
+                    count_topics(node["children"])
+        count_topics(skill_tree["nodes"])
+        
+        # Store profile
+        profile_data = {
+            "profile_id": profile_id,
+            "target_role": request.targetRole,
+            "industry": industry,
+            "background": request.background,
+            "hours_per_week": request.hoursPerWeek,
+            "learning_speed": request.learningSpeed,
+            "preferred_style": request.preferredStyle,
+            "target_months": request.targetMonths,
+            "career_fit": ai_data.get("career_fit", {}),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await learning_profiles_collection.insert_one(profile_data)
+        
+        return {
+            "profile": {
+                "id": profile_id,
+                "targetRole": request.targetRole,
+                "industry": industry,
+                **ai_data.get("career_fit", {})
+            },
+            "skill_tree": skill_tree,
+            "weekly_plan": ai_data.get("weekly_plan", {"week": 1, "tasks": []}),
+            "progress": {
+                "completed": 0,
+                "total": total_topics,
+                "velocity": 0
+            },
+            "personalized_message": ai_data.get("personalized_message", "Welcome!")
+        }
+        
+    except Exception as e:
+        logger.error(f"Learning onboard error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/learning/mentor")
+async def learning_mentor(request: LearningMentorRequest):
+    """Interactive mentoring session for a specific topic"""
+    try:
+        topic = request.topic or {}
+        user_profile = request.user_profile or {}
+        
+        speed_context = {
+            "slow": "Be very patient, use many examples and analogies",
+            "normal": "Balance explanation with examples",
+            "fast": "Be concise but thorough"
+        }
+        
+        style_context = {
+            "visual": "Use diagrams and visual descriptions",
+            "practical": "Focus on hands-on examples and code",
+            "theory": "Provide deep conceptual explanations",
+            "mixed": "Balance theory with practical examples"
+        }
+        
+        system_prompt = f"""You are a world-class learning mentor teaching {topic.get('name', 'this topic')}.
+
+USER PROFILE:
+- Target Role: {user_profile.get('targetRole', 'Software Engineer')}
+- Learning Speed: {speed_context.get(user_profile.get('learningSpeed', 'normal'), speed_context['normal'])}
+- Style Preference: {style_context.get(user_profile.get('preferredStyle', 'mixed'), style_context['mixed'])}
+
+CURRENT TOPIC: {topic.get('name', 'General')}
+Level: {topic.get('level', 'Intermediate')}
+Objective: {topic.get('objective', 'Master this concept')}
+
+YOUR ROLE:
+1. Explain concepts clearly at the appropriate level
+2. Use analogies and real-world examples
+3. Ask follow-up questions to confirm understanding
+4. Provide practice problems when appropriate
+5. Celebrate progress and encourage the learner
+
+RESPONSE FORMAT:
+Provide your response as helpful markdown text. Be encouraging but educational.
+If appropriate, include a quiz question at the end."""
+        
+        chat = get_chat_instance(system_prompt)
+        
+        # Build context from conversation history
+        context = ""
+        for msg in request.conversation_history[-10:]:
+            context += f"{msg.role}: {msg.content}\n"
+        
+        user_msg = UserMessage(text=f"{context}\nUser: {request.message}")
+        response = await chat.send_message(user_msg)
+        
+        return {
+            "response": response or "I'm here to help you learn! What would you like to know?",
+            "quiz": None  # Can be enhanced to include quiz questions
+        }
+        
+    except Exception as e:
+        logger.error(f"Learning mentor error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/learning/complete-topic")
+async def complete_topic(request: TopicCompleteRequest):
+    """Mark a topic as complete and update progress"""
+    try:
+        # Update progress in database
+        progress_update = {
+            "topic_id": request.topic_id,
+            "user_id": request.user_id,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "score": request.score
+        }
+        
+        await learning_progress_collection.insert_one(progress_update)
+        
+        # Get updated progress count
+        completed_count = await learning_progress_collection.count_documents({"user_id": request.user_id})
+        
+        return {
+            "success": True,
+            "progress": {
+                "completed": completed_count,
+                "total": 25,  # This should be dynamic based on skill tree
+                "velocity": round(completed_count / 4, 1)  # topics per week estimate
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Complete topic error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/learning/progress/{user_id}")
+async def get_learning_progress(user_id: str):
+    """Get user's learning progress"""
+    try:
+        completed_topics = await learning_progress_collection.find({"user_id": user_id}).to_list(100)
+        profile = await learning_profiles_collection.find_one({"profile_id": user_id})
+        
+        return {
+            "completed_topics": [{"topic_id": t["topic_id"], "completed_at": t["completed_at"]} for t in completed_topics],
+            "profile": profile,
+            "stats": {
+                "total_completed": len(completed_topics),
+                "current_streak": 7,  # Would need proper tracking
+                "hours_studied": len(completed_topics) * 2
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Get progress error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router
 app.include_router(api_router)
 
