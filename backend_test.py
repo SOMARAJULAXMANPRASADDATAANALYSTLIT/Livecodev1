@@ -731,6 +731,52 @@ print(result)"""
         
         return success, response
 
+    def test_html_report_generation(self):
+        """Test HTML report generation endpoint"""
+        # Sample company data and sheets for HTML report generation
+        data = {
+            "company_name": "OpenAI",
+            "sheets": {
+                "1_Company_Overview": {
+                    "title": "Company Overview",
+                    "content": "OpenAI is an AI research and deployment company focused on developing artificial general intelligence (AGI) that benefits all of humanity."
+                },
+                "2_Products_Services": {
+                    "title": "Products & Services", 
+                    "content": "Main products include GPT models, ChatGPT, DALL-E, and API services for developers."
+                },
+                "3_Market_Analysis": {
+                    "title": "Market Analysis",
+                    "content": "Leading position in the generative AI market with significant competitive advantages."
+                }
+            }
+        }
+        
+        success, response = self.run_test("HTML Report Generation", "POST", "agent/html-report", 200, data, timeout=60)
+        
+        if success and response:
+            # Check if HTML content is generated
+            if 'html_report' in response:
+                html_content = response['html_report']
+                print(f"   ✓ HTML report generated: {len(html_content)} characters")
+                
+                # Basic HTML validation
+                if '<html>' in html_content and '</html>' in html_content:
+                    print(f"   ✓ Valid HTML structure detected")
+                else:
+                    print(f"   ⚠️ HTML structure may be incomplete")
+                
+                # Check for company name in HTML
+                if 'OpenAI' in html_content:
+                    print(f"   ✓ Company name found in HTML report")
+                else:
+                    print(f"   ⚠️ Company name not found in HTML report")
+            else:
+                print(f"   ⚠️ No 'html_report' key in response")
+                print(f"   Response keys: {list(response.keys()) if isinstance(response, dict) else 'Non-dict response'}")
+        
+        return success, response
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting Live Code Mentor API Tests")
