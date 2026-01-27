@@ -1405,6 +1405,432 @@ async def get_project_structure(project_id: str):
         logger.error(f"Get structure error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============== MULTI-INDUSTRY AGENT SYSTEM ==============
+
+AGENT_DEFINITIONS = {
+    "coding": {
+        "name": "Coding Mentor Agent",
+        "icon": "👨‍💻",
+        "description": "Full IDE + tutor for software development",
+        "system_prompt": """You are a world-class senior software engineer and coding mentor.
+You teach, debug, analyze, and fix code across all programming languages.
+Focus on teaching concepts, not just providing solutions.
+Adapt explanations to the user's skill level."""
+    },
+    "health": {
+        "name": "Health & Medical Agent",
+        "icon": "🏥",
+        "description": "Medical concepts, patient education, anatomy visualization",
+        "system_prompt": """You are a medical education specialist and health advisor.
+You explain medical concepts clearly, create patient education plans, and help visualize health information.
+
+IMPORTANT DISCLAIMER: You are NOT a doctor. Always recommend consulting healthcare professionals.
+
+You can:
+- Explain medical concepts in simple terms
+- Create patient education materials
+- Describe anatomy and diseases
+- Generate treatment timelines for education
+- Explain medication purposes (not prescribe)
+- Help understand lab results (not diagnose)
+
+Always include appropriate medical disclaimers."""
+    },
+    "travel": {
+        "name": "Travel & Tourism Agent",
+        "icon": "✈️",
+        "description": "Trip planning, itineraries, destination guides",
+        "system_prompt": """You are an expert travel planner and tourism specialist.
+You create comprehensive trip plans, day-wise itineraries, and share fascinating stories about places.
+
+You can:
+- Build full trip plans with budgets
+- Create day-by-day itineraries
+- Explain history and stories of destinations
+- Recommend hotels, restaurants, attractions
+- Provide travel tips and local customs
+- Create interactive travel guides
+
+Include practical information: best times to visit, local transportation, safety tips."""
+    },
+    "business": {
+        "name": "Business Intelligence Agent",
+        "icon": "📊",
+        "description": "Company analysis, competitor research, strategy dashboards",
+        "system_prompt": """You are a senior business analyst and market researcher.
+You analyze companies, perform competitive analysis, and create executive-grade intelligence reports.
+
+STRICT RULES:
+- Use ONLY credible public sources
+- Every data point MUST have a source URL
+- If data is not publicly available, write exactly: "Not Publicly Available"
+- NO hallucination or guessing
+- Cite: company websites, press releases, LinkedIn, Crunchbase, trusted media
+
+You can:
+- Analyze company websites and products
+- Perform competitor analysis
+- Generate multi-sheet research reports
+- Create professional HTML strategy dashboards
+- Identify market opportunities and challenges"""
+    }
+}
+
+# Models for Multi-Industry Agents
+class AgentChatRequest(BaseModel):
+    agent_type: str  # coding, health, travel, business
+    message: str
+    conversation_history: List[ChatMessage] = []
+    context: Optional[Dict[str, Any]] = None
+
+class AgentChatResponse(BaseModel):
+    response: str
+    agent_type: str
+    agent_name: str
+    suggestions: Optional[List[str]] = None
+
+class HealthExplainRequest(BaseModel):
+    topic: str
+    detail_level: str = "intermediate"  # simple, intermediate, detailed
+
+class TravelPlanRequest(BaseModel):
+    destination: str
+    duration_days: int
+    interests: List[str] = []
+    budget_level: str = "moderate"  # budget, moderate, luxury
+
+class CompanyAnalysisRequest(BaseModel):
+    company_url: str
+    analysis_type: str = "full"  # full, competitors, products, okrs
+
+class CompanyAnalysisResponse(BaseModel):
+    company_name: str
+    sheets: Dict[str, List[Dict[str, Any]]]
+    html_report: Optional[str] = None
+
+@api_router.get("/agents")
+async def list_agents():
+    """List all available agents"""
+    return {
+        "agents": [
+            {
+                "id": key,
+                "name": agent["name"],
+                "icon": agent["icon"],
+                "description": agent["description"]
+            }
+            for key, agent in AGENT_DEFINITIONS.items()
+        ]
+    }
+
+@api_router.post("/agent/chat", response_model=AgentChatResponse)
+async def agent_chat(request: AgentChatRequest):
+    """Chat with a specific agent"""
+    try:
+        if request.agent_type not in AGENT_DEFINITIONS:
+            raise HTTPException(status_code=400, detail=f"Unknown agent type: {request.agent_type}")
+        
+        agent = AGENT_DEFINITIONS[request.agent_type]
+        
+        system_prompt = agent["system_prompt"]
+        
+        # Add context if provided
+        if request.context:
+            context_str = "\n".join([f"{k}: {v}" for k, v in request.context.items()])
+            system_prompt += f"\n\nCurrent context:\n{context_str}"
+        
+        chat = get_chat_instance(system_prompt)
+        
+        # Build conversation context
+        context = ""
+        for msg in request.conversation_history[-10:]:
+            context += f"{msg.role}: {msg.content}\n"
+        
+        user_msg = UserMessage(text=f"{context}\nUser: {request.message}")
+        response = await chat.send_message(user_msg)
+        
+        # Generate suggestions based on agent type
+        suggestions = None
+        if request.agent_type == "health":
+            suggestions = ["Explain in simpler terms", "Show a timeline", "What are the symptoms?"]
+        elif request.agent_type == "travel":
+            suggestions = ["Show day-by-day itinerary", "Best restaurants?", "Local customs?"]
+        elif request.agent_type == "business":
+            suggestions = ["Competitor analysis", "Generate HTML report", "Show pricing model"]
+        
+        return AgentChatResponse(
+            response=response or "I'm here to help!",
+            agent_type=request.agent_type,
+            agent_name=agent["name"],
+            suggestions=suggestions
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Agent chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/agent/health/explain")
+async def health_explain(request: HealthExplainRequest):
+    """Explain a medical/health topic"""
+    try:
+        detail_prompts = {
+            "simple": "Explain like I'm 10 years old. Use analogies.",
+            "intermediate": "Explain clearly with some medical terms defined.",
+            "detailed": "Provide a comprehensive medical explanation."
+        }
+        
+        system_prompt = f"""You are a medical education specialist.
+{detail_prompts.get(request.detail_level, detail_prompts['intermediate'])}
+
+RESPOND ONLY WITH VALID JSON:
+{{
+    "title": "Topic name",
+    "explanation": "Clear explanation",
+    "key_points": ["Point 1", "Point 2"],
+    "common_questions": ["Q1?", "Q2?"],
+    "when_to_see_doctor": "When medical attention is needed",
+    "disclaimer": "Medical disclaimer"
+}}
+
+ALWAYS include a medical disclaimer."""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Explain: {request.topic}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "title": request.topic,
+            "explanation": response or "Unable to explain",
+            "key_points": [],
+            "disclaimer": "This is for educational purposes only. Consult a healthcare professional."
+        })
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Health explain error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/agent/travel/plan")
+async def travel_plan(request: TravelPlanRequest):
+    """Create a travel plan"""
+    try:
+        budget_guides = {
+            "budget": "Focus on affordable options, hostels, street food, free attractions",
+            "moderate": "Balance comfort and value, mid-range hotels, local restaurants",
+            "luxury": "Premium experiences, 5-star hotels, fine dining, exclusive tours"
+        }
+        
+        interests_str = ", ".join(request.interests) if request.interests else "general sightseeing"
+        
+        system_prompt = f"""You are an expert travel planner.
+Create a {request.duration_days}-day trip plan for {request.destination}.
+Budget level: {request.budget_level} - {budget_guides.get(request.budget_level, budget_guides['moderate'])}
+Interests: {interests_str}
+
+RESPOND ONLY WITH VALID JSON:
+{{
+    "destination": "{request.destination}",
+    "duration": {request.duration_days},
+    "overview": "Trip overview",
+    "best_time_to_visit": "Recommended seasons",
+    "estimated_budget": "Budget range in USD",
+    "itinerary": [
+        {{
+            "day": 1,
+            "title": "Day title",
+            "morning": "Morning activities",
+            "afternoon": "Afternoon activities",
+            "evening": "Evening activities",
+            "meals": ["Breakfast recommendation", "Lunch", "Dinner"],
+            "tips": "Daily tips"
+        }}
+    ],
+    "accommodations": [{{"name": "Hotel", "type": "Type", "price_range": "$100-150/night"}}],
+    "must_see": ["Attraction 1", "Attraction 2"],
+    "local_tips": ["Tip 1", "Tip 2"],
+    "packing_list": ["Item 1", "Item 2"]
+}}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Create a detailed travel plan for {request.destination}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "destination": request.destination,
+            "duration": request.duration_days,
+            "overview": "Travel plan",
+            "itinerary": [],
+            "must_see": [],
+            "local_tips": []
+        })
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Travel plan error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/agent/business/analyze", response_model=CompanyAnalysisResponse)
+async def analyze_company(request: CompanyAnalysisRequest):
+    """Analyze a company - Business Intelligence mode"""
+    try:
+        system_prompt = """You are a senior business analyst performing company research.
+
+STRICT RULES:
+1. Use ONLY credible public sources (company website, LinkedIn, Crunchbase, press releases, trusted media)
+2. Every piece of data MUST include a source URL
+3. If data is not publicly available, write exactly: "Not Publicly Available"
+4. NO hallucination or fabrication
+5. Be thorough but accurate
+
+Generate structured analysis in this EXACT JSON format:
+{
+    "company_name": "Company Name",
+    "sheets": {
+        "1_Company_Overview": [
+            {"category": "Basic Info", "subcategory": "Legal Name", "detail": "...", "source": "URL", "date": "2024"}
+        ],
+        "2_Products_Services": [
+            {"product": "Product Name", "category": "Type", "features": "...", "target_audience": "...", "source": "URL"}
+        ],
+        "3_Customer_Success": [
+            {"goal": "Goal", "metric_1": "...", "metric_2": "...", "case": "...", "source": "URL"}
+        ],
+        "4_Pain_Points": [
+            {"type": "Technical", "category": "...", "description": "...", "solution": "...", "source": "URL"}
+        ],
+        "5_Competitive_Analysis": [
+            {"competitor": "Name", "strengths": "...", "weaknesses": "...", "advantage": "...", "source": "URL"}
+        ],
+        "6_Case_Studies": [
+            {"client": "Name", "product_used": "...", "outcomes": "...", "source": "URL"}
+        ],
+        "7_Pricing_Model": [
+            {"component": "Tier", "description": "...", "price": "...", "source": "URL"}
+        ],
+        "8_OKRs_Strategy": [
+            {"objective": "...", "key_result_1": "...", "key_result_2": "...", "rationale": "..."}
+        ]
+    }
+}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Analyze this company website: {request.company_url}\nAnalysis type: {request.analysis_type}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "company_name": "Unknown Company",
+            "sheets": {}
+        })
+        
+        # Generate HTML report if requested
+        html_report = None
+        if request.analysis_type == "full":
+            html_report = generate_html_report(data)
+        
+        return CompanyAnalysisResponse(
+            company_name=data.get("company_name", "Unknown"),
+            sheets=data.get("sheets", {}),
+            html_report=html_report
+        )
+        
+    except Exception as e:
+        logger.error(f"Company analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def generate_html_report(data: dict) -> str:
+    """Generate professional HTML strategy dashboard"""
+    company_name = data.get("company_name", "Company Analysis")
+    sheets = data.get("sheets", {})
+    
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{company_name} - Strategy Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass {{ background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); }}
+        .gradient-text {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <nav class="fixed top-0 w-full glass border-b border-white/10 z-50 p-4">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold gradient-text">{company_name}</h1>
+            <span class="text-sm text-gray-400">Strategy Dashboard</span>
+        </div>
+    </nav>
+    
+    <main class="pt-20 p-8 max-w-7xl mx-auto">
+        <div class="grid gap-8">
+"""
+    
+    # Generate sections for each sheet
+    sheet_icons = {
+        "1_Company_Overview": "🏢",
+        "2_Products_Services": "📦",
+        "3_Customer_Success": "🎯",
+        "4_Pain_Points": "⚠️",
+        "5_Competitive_Analysis": "📊",
+        "6_Case_Studies": "📝",
+        "7_Pricing_Model": "💰",
+        "8_OKRs_Strategy": "🚀"
+    }
+    
+    for sheet_name, rows in sheets.items():
+        icon = sheet_icons.get(sheet_name, "📋")
+        title = sheet_name.replace("_", " ")
+        
+        html += f"""
+            <section class="glass rounded-2xl p-6 border border-white/10">
+                <h2 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <span>{icon}</span> {title}
+                </h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="border-b border-white/10">
+                            <tr>
+"""
+        
+        # Generate table headers from first row
+        if rows and isinstance(rows, list) and len(rows) > 0:
+            for key in rows[0].keys():
+                html += f'<th class="text-left p-2 text-gray-400">{key.replace("_", " ").title()}</th>'
+            
+            html += "</tr></thead><tbody>"
+            
+            # Generate rows
+            for row in rows:
+                html += "<tr class='border-b border-white/5 hover:bg-white/5'>"
+                for value in row.values():
+                    html += f'<td class="p-2">{value}</td>'
+                html += "</tr>"
+        
+        html += """
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+"""
+    
+    html += """
+        </div>
+        
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+            <p>Generated by Live Code Mentor - Business Intelligence Agent</p>
+            <p class="mt-2">Data sourced from publicly available information</p>
+        </footer>
+    </main>
+</body>
+</html>"""
+    
+    return html
+
 # Include the router
 app.include_router(api_router)
 
