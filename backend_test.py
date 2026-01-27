@@ -621,6 +621,116 @@ print(result)"""
         
         return all_passed, {}
 
+    def test_agent_visual_generation(self):
+        """Test visual generation for agents"""
+        # Test with form data as specified in the endpoint
+        url = f"{self.base_url}/api/agent/generate-visual"
+        
+        self.tests_run += 1
+        print(f"\n🔍 Testing Agent Visual Generation...")
+        print(f"   URL: {url}")
+        
+        try:
+            # Use form data as the endpoint expects
+            form_data = {
+                'agent_type': 'coding',
+                'topic': 'REST API',
+                'visual_type': 'diagram'
+            }
+            
+            response = requests.post(url, data=form_data, timeout=60)
+            
+            success = response.status_code == 200
+            if success:
+                self.tests_passed += 1
+                print(f"✅ Passed - Status: {response.status_code}")
+                try:
+                    response_data = response.json()
+                    if 'image_url' in response_data or 'svg' in response_data or 'diagram' in response_data:
+                        print(f"   ✓ Visual content generated successfully")
+                    else:
+                        print(f"   Response keys: {list(response_data.keys()) if isinstance(response_data, dict) else 'Non-dict response'}")
+                except:
+                    print("   Response: Non-JSON or empty")
+            else:
+                self.failed_tests.append({
+                    "test": "Agent Visual Generation",
+                    "expected": 200,
+                    "actual": response.status_code,
+                    "response": response.text[:200] if response.text else "Empty response"
+                })
+                print(f"❌ Failed - Expected 200, got {response.status_code}")
+                print(f"   Response: {response.text[:200]}")
+
+            return success, response.json() if success and response.text else {}
+
+        except requests.exceptions.Timeout:
+            print(f"❌ Failed - Timeout after 60s")
+            self.failed_tests.append({"test": "Agent Visual Generation", "error": "Timeout"})
+            return False, {}
+        except Exception as e:
+            print(f"❌ Failed - Error: {str(e)}")
+            self.failed_tests.append({"test": "Agent Visual Generation", "error": str(e)})
+            return False, {}
+
+    def test_news_feed(self):
+        """Test news feed endpoint"""
+        success, response = self.run_test("News Feed", "GET", "news/feed", 200, timeout=30)
+        
+        if success and response:
+            # Check if response has articles with real URLs
+            if 'articles' in response:
+                articles = response['articles']
+                print(f"   ✓ Found {len(articles)} articles")
+                
+                # Check for real-looking URLs
+                real_urls_found = 0
+                for article in articles[:3]:  # Check first 3 articles
+                    url = article.get('url', '')
+                    if any(domain in url for domain in ['cnn.com', 'bbc.com', 'reuters.com', 'techcrunch.com', 'bloomberg.com', 'wsj.com']):
+                        real_urls_found += 1
+                        print(f"   ✓ Real news URL found: {url[:50]}...")
+                
+                if real_urls_found > 0:
+                    print(f"   ✓ {real_urls_found} articles with real news URLs")
+                else:
+                    print(f"   ⚠️ No real news URLs detected in sample")
+            else:
+                print(f"   ⚠️ No 'articles' key in response")
+        
+        return success, response
+
+    def test_company_analysis(self):
+        """Test company analysis (Business Agent)"""
+        data = {
+            "company_url": "https://openai.com",
+            "analysis_type": "full"
+        }
+        
+        success, response = self.run_test("Company Analysis", "POST", "agent/business/analyze", 200, data, timeout=120)
+        
+        if success and response:
+            # Check for 8-sheet output structure
+            expected_keys = ["company_name", "sheets"]
+            if all(key in response for key in expected_keys):
+                sheets = response.get('sheets', {})
+                print(f"   ✓ Company: {response.get('company_name', 'N/A')}")
+                print(f"   ✓ Analysis sheets: {len(sheets)}")
+                
+                # Check for expected sheet types
+                expected_sheets = ['overview', 'products', 'competitors', 'financials', 'team', 'strategy', 'risks', 'opportunities']
+                found_sheets = list(sheets.keys())
+                print(f"   ✓ Sheet types found: {found_sheets}")
+                
+                if len(sheets) >= 6:  # At least 6 sheets for comprehensive analysis
+                    print(f"   ✓ Comprehensive analysis with {len(sheets)} sheets")
+                else:
+                    print(f"   ⚠️ Limited analysis - only {len(sheets)} sheets")
+            else:
+                print(f"   ⚠️ Missing expected response structure")
+        
+        return success, response
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting Live Code Mentor API Tests")
