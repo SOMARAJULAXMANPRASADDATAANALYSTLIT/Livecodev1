@@ -731,25 +731,60 @@ const SpecialResultCard = ({ result, onDownload }) => {
   
   if (result.type === "visual") {
     const { data } = result;
+    const [isZoomed, setIsZoomed] = useState(false);
+    
+    const downloadImage = () => {
+      if (data.image_base64) {
+        const link = document.createElement('a');
+        link.href = `data:image/png;base64,${data.image_base64}`;
+        link.download = `${data.topic.replace(/\s+/g, '_')}_diagram.png`;
+        link.click();
+      } else if (data.image_url) {
+        window.open(data.image_url, '_blank');
+      }
+    };
+    
     return (
       <div className="glass-light rounded-2xl p-6 border border-[#667eea]/30">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-lg bg-[#667eea]/20 flex items-center justify-center">
-            <Image className="w-5 h-5 text-[#667eea]" />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#667eea]/20 flex items-center justify-center">
+              <Image className="w-5 h-5 text-[#667eea]" />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg">Visual Diagram</h3>
+              <p className="text-xs text-white/50">{data.visual_type} for {data.agent_type}</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-lg">Visual Diagram</h3>
-            <p className="text-xs text-white/50">{data.visual_type} for {data.agent_type}</p>
+          <div className="flex gap-2">
+            <Button onClick={() => setIsZoomed(!isZoomed)} size="sm" variant="outline" className="gap-1">
+              {isZoomed ? <span>🔍-</span> : <span>🔍+</span>}
+              {isZoomed ? 'Zoom Out' : 'Zoom In'}
+            </Button>
+            <Button onClick={downloadImage} size="sm" className="bg-[#667eea] gap-1">
+              <Download className="w-4 h-4" />
+              Download
+            </Button>
           </div>
         </div>
         
         {data.image_url ? (
-          <div className="rounded-xl overflow-hidden border border-white/10">
-            <img src={data.image_url} alt={data.topic} className="w-full object-contain max-h-96" />
+          <div className={`rounded-xl overflow-hidden border border-white/10 transition-all ${isZoomed ? 'max-h-none' : 'max-h-96'}`}>
+            <img 
+              src={data.image_url} 
+              alt={data.topic} 
+              className={`w-full object-contain cursor-pointer ${isZoomed ? '' : 'max-h-96'}`}
+              onClick={() => setIsZoomed(!isZoomed)}
+            />
           </div>
         ) : data.image_base64 ? (
-          <div className="rounded-xl overflow-hidden border border-white/10">
-            <img src={`data:image/png;base64,${data.image_base64}`} alt={data.topic} className="w-full object-contain max-h-96" />
+          <div className={`rounded-xl overflow-hidden border border-white/10 transition-all ${isZoomed ? 'max-h-none' : 'max-h-96'}`}>
+            <img 
+              src={`data:image/png;base64,${data.image_base64}`} 
+              alt={data.topic} 
+              className={`w-full object-contain cursor-pointer ${isZoomed ? '' : 'max-h-96'}`}
+              onClick={() => setIsZoomed(!isZoomed)}
+            />
           </div>
         ) : (
           <div className="p-8 text-center text-white/50">
@@ -759,6 +794,7 @@ const SpecialResultCard = ({ result, onDownload }) => {
         )}
         
         <p className="text-sm text-white/60 mt-4">{data.topic}</p>
+        {data.text_response && <p className="text-xs text-white/40 mt-2">{data.text_response}</p>}
       </div>
     );
   }
