@@ -997,7 +997,7 @@ Respond ONLY with valid JSON:
 
 @api_router.post("/project/{project_id}/analyze-full")
 async def analyze_full_project(project_id: str, request: ProjectAnalysisRequest):
-    """Full AI analysis of uploaded project"""
+    """Full AI analysis of uploaded project - Returns complete UI contract"""
     try:
         project = await projects_collection.find_one({"project_id": project_id})
         if not project:
@@ -1019,7 +1019,7 @@ async def analyze_full_project(project_id: str, request: ProjectAnalysisRequest)
                 files_summary.append(rel_path)
         
         # Get content of key files
-        key_file_patterns = ['main', 'app', 'index', 'server', 'config', 'routes', 'models', 'package.json', 'requirements.txt']
+        key_file_patterns = ['main', 'app', 'index', 'server', 'config', 'routes', 'models', 'package.json', 'requirements.txt', 'README']
         for pattern in key_file_patterns:
             for f in files_summary[:30]:
                 if pattern in f.lower():
@@ -1030,26 +1030,63 @@ async def analyze_full_project(project_id: str, request: ProjectAnalysisRequest)
                     except:
                         pass
         
-        system_prompt = f"""You are an expert software architect analyzing a codebase.
+        # Detect run commands from package.json or requirements.txt
+        run_commands = detect_run_commands(workspace_path)
+        
+        system_prompt = f"""You are an expert software architect and mentor analyzing a codebase.
 {skill_context}
 
-Analyze this project and provide comprehensive insights.
+Analyze this project and provide comprehensive insights with EXACT run commands.
 
 RESPOND ONLY WITH VALID JSON:
 {{
     "project_name": "Detected project name",
     "purpose": "What this project does (2-3 sentences)",
     "architecture_overview": "High-level architecture description",
+    "project_type": "React/Next/Node/Python/FastAPI/etc",
     "entry_points": [{{"file": "filename", "purpose": "what it does"}}],
     "main_modules": [{{"name": "Module name", "purpose": "What it does", "files": ["file1", "file2"]}}],
     "dependencies": ["key dependency 1", "key dependency 2"],
     "frameworks": ["Framework 1", "Framework 2"],
+    "run_commands": {{
+        "install": "npm install OR pip install -r requirements.txt",
+        "dev": "npm run dev OR python app.py",
+        "build": "npm run build",
+        "test": "npm test",
+        "port": "3000 or detected port",
+        "entry_file": "src/main.jsx or app.py"
+    }},
     "learning_roadmap": {{
         "beginner": ["Step 1: Start with...", "Step 2: Then learn..."],
         "intermediate": ["Step 1: ...", "Step 2: ..."],
         "advanced": ["Step 1: ...", "Step 2: ..."]
     }},
-    "file_recommendations": [{{"file": "filename", "reason": "why to read this first"}}],
+    "weekly_learning_plan": [
+        {{
+            "week": 1,
+            "topic": "Project Foundation",
+            "goals": ["Understand project structure", "Run the project locally"],
+            "files_to_study": ["README.md", "package.json", "src/index.js"],
+            "exercises": ["Clone and run the project", "Modify a simple component"],
+            "homework": "Create a new route or component"
+        }},
+        {{
+            "week": 2,
+            "topic": "Core Logic",
+            "goals": ["Learn main features", "Understand data flow"],
+            "files_to_study": ["src/App.jsx", "src/components/"],
+            "exercises": ["Add a new feature", "Debug an existing flow"],
+            "homework": "Implement a small enhancement"
+        }}
+    ],
+    "what_you_will_learn": [
+        "React hooks and state management",
+        "API integration patterns",
+        "Component composition"
+    ],
+    "difficulty_level": "Beginner|Intermediate|Advanced",
+    "relevant_roles": ["Frontend Engineer", "Full Stack Developer"],
+    "file_recommendations": [{{"file": "filename", "reason": "why to read this first", "order": 1}}],
     "potential_issues": ["Issue 1", "Issue 2"],
     "improvement_suggestions": ["Suggestion 1", "Suggestion 2"]
 }}"""
@@ -1063,6 +1100,8 @@ Frameworks Detected: {project.get('frameworks', [])}
 Build System: {project.get('build_system', 'Unknown')}
 Has Tests: {project.get('has_tests', False)}
 
+Auto-detected Run Commands: {json.dumps(run_commands)}
+
 Files ({len(files_summary)} total):
 {chr(10).join(files_summary[:50])}
 
@@ -1074,17 +1113,127 @@ Key File Contents:
             "project_name": project['name'],
             "purpose": "Analysis pending",
             "architecture_overview": "Unable to analyze",
+            "project_type": "Unknown",
             "entry_points": [],
             "main_modules": [],
             "dependencies": [],
             "frameworks": project.get('frameworks', []),
+            "run_commands": run_commands,
             "learning_roadmap": {},
+            "weekly_learning_plan": [],
+            "what_you_will_learn": [],
+            "difficulty_level": "Intermediate",
+            "relevant_roles": [],
             "file_recommendations": [],
             "potential_issues": [],
             "improvement_suggestions": []
         })
         
-        return FullProjectAnalysis(**data)
+        # Merge detected run commands with AI suggestions
+        if not data.get("run_commands") or not data["run_commands"].get("dev"):
+            data["run_commands"] = run_commands
+        
+        return data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Full project analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def detect_run_commands(workspace_path: Path) -> dict:
+    """Auto-detect run commands from project files"""
+    commands = {
+        "install": None,
+        "dev": None,
+        "build": None,
+        "test": None,
+        "port": None,
+        "entry_file": None
+    }
+    
+    # Check package.json (Node/React/Next projects)
+    pkg_json = workspace_path / 'package.json'
+    if pkg_json.exists():
+        try:
+            pkg = json.loads(pkg_json.read_text())
+            scripts = pkg.get('scripts', {})
+            
+            commands["install"] = "npm install"
+            
+            # Detect dev command
+            if 'dev' in scripts:
+                commands["dev"] = "npm run dev"
+            elif 'start' in scripts:
+                commands["dev"] = "npm start"
+            elif 'serve' in scripts:
+                commands["dev"] = "npm run serve"
+            
+            # Detect build command
+            if 'build' in scripts:
+                commands["build"] = "npm run build"
+            
+            # Detect test command
+            if 'test' in scripts:
+                commands["test"] = "npm test"
+            
+            # Detect port from scripts
+            dev_script = scripts.get('dev', '') + scripts.get('start', '')
+            if '3000' in dev_script:
+                commands["port"] = "3000"
+            elif '5173' in dev_script or 'vite' in dev_script.lower():
+                commands["port"] = "5173"
+            elif '8080' in dev_script:
+                commands["port"] = "8080"
+            else:
+                commands["port"] = "3000"  # Default for most Node projects
+            
+            # Detect entry file
+            main_field = pkg.get('main', '')
+            if main_field:
+                commands["entry_file"] = main_field
+            elif (workspace_path / 'src' / 'index.tsx').exists():
+                commands["entry_file"] = "src/index.tsx"
+            elif (workspace_path / 'src' / 'index.js').exists():
+                commands["entry_file"] = "src/index.js"
+            elif (workspace_path / 'src' / 'main.jsx').exists():
+                commands["entry_file"] = "src/main.jsx"
+            
+        except Exception as e:
+            logger.warning(f"Error parsing package.json: {e}")
+    
+    # Check requirements.txt (Python projects)
+    req_txt = workspace_path / 'requirements.txt'
+    if req_txt.exists() and not commands["install"]:
+        commands["install"] = "pip install -r requirements.txt"
+        
+        # Find Python entry point
+        for entry in ['app.py', 'main.py', 'server.py', 'run.py', 'manage.py']:
+            if (workspace_path / entry).exists():
+                commands["entry_file"] = entry
+                
+                # Check for Flask/FastAPI
+                try:
+                    content = (workspace_path / entry).read_text()
+                    if 'FastAPI' in content:
+                        commands["dev"] = f"uvicorn {entry[:-3]}:app --reload --port 8000"
+                        commands["port"] = "8000"
+                    elif 'Flask' in content:
+                        commands["dev"] = f"python {entry}"
+                        commands["port"] = "5000"
+                    else:
+                        commands["dev"] = f"python {entry}"
+                except:
+                    pass
+                break
+    
+    # Check for Dockerfile
+    if (workspace_path / 'Dockerfile').exists():
+        commands["build"] = commands.get("build") or "docker build -t myapp ."
+        commands["dev"] = commands.get("dev") or "docker run -p 3000:3000 myapp"
+    
+    return commands
         
     except HTTPException:
         raise
