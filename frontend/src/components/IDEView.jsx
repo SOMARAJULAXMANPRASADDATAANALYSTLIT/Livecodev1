@@ -7,7 +7,6 @@ import {
   TestTube, Package, GitBranch, Cpu, Zap, AlertTriangle
 } from "lucide-react";
 import Editor from "@monaco-editor/react";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -48,6 +47,7 @@ const IDEView = () => {
   // Terminal state
   const [terminalOutput, setTerminalOutput] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(true);
   
   // Line mentoring state
   const [selectedLines, setSelectedLines] = useState([]);
@@ -70,13 +70,13 @@ const IDEView = () => {
     setShowUpload(false);
     
     // Auto-update language based on dominant language
-    if (projectData.languages?.length > 0) {
+    if (projectData.languages && projectData.languages.length > 0) {
       const dominant = projectData.languages[0].name.toLowerCase();
       setCurrentLanguage(dominant);
     }
     
     // Load README or first entry point
-    if (projectData.entry_points?.length > 0) {
+    if (projectData.entry_points && projectData.entry_points.length > 0) {
       await loadFile(projectData.entry_points[0]);
     } else if (projectData.readme_content) {
       setOpenFiles([{ path: 'README.md', content: projectData.readme_content, language: 'markdown' }]);
@@ -180,6 +180,7 @@ const IDEView = () => {
     if (!project) return;
     
     setIsRunning(true);
+    setShowTerminal(true);
     setTerminalOutput(prev => [...prev, { type: 'command', text: filePath ? `Running ${filePath}...` : 'Running project...' }]);
     
     try {
@@ -234,6 +235,7 @@ const IDEView = () => {
     if (!project) return;
     
     setIsRunning(true);
+    setShowTerminal(true);
     setTerminalOutput(prev => [...prev, { type: 'command', text: 'Running tests...' }]);
     
     try {
@@ -270,6 +272,7 @@ const IDEView = () => {
     if (!project) return;
     
     setIsRunning(true);
+    setShowTerminal(true);
     setTerminalOutput(prev => [...prev, { type: 'command', text: 'Installing dependencies...' }]);
     
     try {
@@ -348,7 +351,7 @@ const IDEView = () => {
       setBugs(data.bugs || []);
       setShowAnalysis(true);
       
-      if (data.bugs?.length > 0) {
+      if (data.bugs && data.bugs.length > 0) {
         toast.warning(`Found ${data.bugs.length} issue(s)`);
       } else {
         toast.success("No issues found!");
@@ -405,7 +408,9 @@ const IDEView = () => {
       
       const data = await response.json();
       setEditorContent(data.fixed_code);
-      setHasUnsavedChanges(prev => ({ ...prev, [currentFile?.path]: true }));
+      if (currentFile) {
+        setHasUnsavedChanges(prev => ({ ...prev, [currentFile.path]: true }));
+      }
       toast.success("Code fixed!");
     } catch (error) {
       toast.error("Fix failed");
@@ -485,7 +490,7 @@ const IDEView = () => {
   return (
     <div className="h-[calc(100vh-120px)] flex flex-col">
       {/* Top Toolbar */}
-      <div className="flex items-center justify-between gap-4 p-2 bg-[#1E1E1E] border-b border-white/10">
+      <div className="flex items-center justify-between gap-4 p-2 bg-[#1E1E1E] border-b border-white/10 flex-wrap">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -523,7 +528,7 @@ const IDEView = () => {
           </Button>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="ghost"
             size="sm"
@@ -629,175 +634,161 @@ const IDEView = () => {
         </div>
       )}
       
-      {/* Main IDE Layout */}
-      <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal">
-          {/* Left Sidebar - File Explorer */}
-          <Panel defaultSize={20} minSize={15} maxSize={35}>
-            <div className="h-full bg-[#252526] border-r border-white/10 flex flex-col">
-              {/* Project Info */}
-              <div className="p-3 border-b border-white/10">
-                <h3 className="font-semibold text-sm truncate">{project?.name || 'Project'}</h3>
-                <div className="flex items-center gap-2 text-xs text-white/50 mt-1">
-                  <span>{project?.total_files} files</span>
-                  <span>•</span>
-                  <span>{(project?.total_size / 1024).toFixed(1)} KB</span>
-                </div>
-              </div>
-              
-              {/* Language Stats */}
-              {project?.languages && (
-                <LanguageStats languages={project.languages} />
-              )}
-              
-              {/* File Tree */}
-              <div className="flex-1 overflow-auto">
-                {project?.root && (
-                  <FileExplorer 
-                    node={project.root} 
-                    onFileSelect={loadFile}
-                    selectedPath={currentFile?.path}
-                  />
-                )}
-              </div>
+      {/* Main IDE Layout - Using CSS Grid instead of resizable panels */}
+      <div className="flex-1 grid grid-cols-[250px_1fr_300px] gap-0 overflow-hidden">
+        {/* Left Sidebar - File Explorer */}
+        <div className="h-full bg-[#252526] border-r border-white/10 flex flex-col overflow-hidden">
+          {/* Project Info */}
+          <div className="p-3 border-b border-white/10">
+            <h3 className="font-semibold text-sm truncate">{project?.name || 'Project'}</h3>
+            <div className="flex items-center gap-2 text-xs text-white/50 mt-1">
+              <span>{project?.total_files} files</span>
+              <span>•</span>
+              <span>{(project?.total_size / 1024).toFixed(1)} KB</span>
             </div>
-          </Panel>
+          </div>
           
-          <PanelResizeHandle className="w-1 bg-white/5 hover:bg-[#667eea]/50 transition-colors" />
+          {/* Language Stats */}
+          {project?.languages && (
+            <LanguageStats languages={project.languages} />
+          )}
           
-          {/* Center - Editor + Terminal */}
-          <Panel defaultSize={55} minSize={30}>
-            <PanelGroup direction="vertical">
-              {/* Editor */}
-              <Panel defaultSize={70} minSize={30}>
-                <div className="h-full flex flex-col bg-[#1E1E1E]">
-                  {/* File Tabs */}
-                  <div className="flex items-center bg-[#252526] border-b border-white/10 overflow-x-auto">
-                    {openFiles.map((file, index) => (
-                      <div
-                        key={file.path}
-                        className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer border-r border-white/10 ${
-                          index === activeFileIndex ? 'bg-[#1E1E1E] text-white' : 'text-white/60 hover:bg-white/5'
-                        }`}
-                        onClick={() => {
-                          setActiveFileIndex(index);
-                          setEditorContent(file.content);
-                          setCurrentLanguage(file.language);
-                        }}
-                      >
-                        <File className="w-3 h-3" />
-                        <span className="truncate max-w-[120px]">
-                          {file.path.split('/').pop()}
-                        </span>
-                        {hasUnsavedChanges[file.path] && <span className="w-2 h-2 rounded-full bg-[#FBBC04]" />}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); closeFile(index); }}
-                          className="p-0.5 rounded hover:bg-white/10"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* Monaco Editor */}
-                  <div className="flex-1">
-                    {openFiles.length > 0 ? (
-                      <Editor
-                        height="100%"
-                        language={currentLanguage}
-                        value={editorContent}
-                        onChange={handleEditorChange}
-                        onMount={handleEditorDidMount}
-                        theme="vs-dark"
-                        options={{
-                          fontSize: 14,
-                          fontFamily: "'JetBrains Mono', monospace",
-                          minimap: { enabled: true },
-                          padding: { top: 8 },
-                          scrollBeyondLastLine: false,
-                          smoothScrolling: true,
-                          lineNumbers: "on",
-                          renderLineHighlight: "all",
-                          bracketPairColorization: { enabled: true },
-                          automaticLayout: true,
-                        }}
-                      />
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-white/40">
-                        <FolderOpen className="w-16 h-16 mb-4" />
-                        <p>Select a file from the explorer to edit</p>
-                        <p className="text-xs mt-2">or upload a new project</p>
-                      </div>
-                    )}
-                  </div>
+          {/* File Tree */}
+          <div className="flex-1 overflow-auto">
+            {project?.root && (
+              <FileExplorer 
+                node={project.root} 
+                onFileSelect={loadFile}
+                selectedPath={currentFile?.path}
+              />
+            )}
+          </div>
+        </div>
+        
+        {/* Center - Editor + Terminal */}
+        <div className="h-full flex flex-col overflow-hidden">
+          {/* Editor */}
+          <div className="flex-1 flex flex-col bg-[#1E1E1E] overflow-hidden" style={{ height: showTerminal ? '65%' : '100%' }}>
+            {/* File Tabs */}
+            <div className="flex items-center bg-[#252526] border-b border-white/10 overflow-x-auto shrink-0">
+              {openFiles.map((file, index) => (
+                <div
+                  key={file.path}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer border-r border-white/10 ${
+                    index === activeFileIndex ? 'bg-[#1E1E1E] text-white' : 'text-white/60 hover:bg-white/5'
+                  }`}
+                  onClick={() => {
+                    setActiveFileIndex(index);
+                    setEditorContent(file.content);
+                    setCurrentLanguage(file.language);
+                  }}
+                >
+                  <File className="w-3 h-3" />
+                  <span className="truncate max-w-[120px]">
+                    {file.path.split('/').pop()}
+                  </span>
+                  {hasUnsavedChanges[file.path] && <span className="w-2 h-2 rounded-full bg-[#FBBC04]" />}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); closeFile(index); }}
+                    className="p-0.5 rounded hover:bg-white/10"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 </div>
-              </Panel>
-              
-              <PanelResizeHandle className="h-1 bg-white/5 hover:bg-[#667eea]/50 transition-colors" />
-              
-              {/* Terminal */}
-              <Panel defaultSize={30} minSize={15}>
-                <IDETerminal 
-                  output={terminalOutput}
-                  onCommand={executeCommand}
-                  isRunning={isRunning}
-                  onClear={() => setTerminalOutput([])}
+              ))}
+            </div>
+            
+            {/* Monaco Editor */}
+            <div className="flex-1 overflow-hidden">
+              {openFiles.length > 0 ? (
+                <Editor
+                  height="100%"
+                  language={currentLanguage}
+                  value={editorContent}
+                  onChange={handleEditorChange}
+                  onMount={handleEditorDidMount}
+                  theme="vs-dark"
+                  options={{
+                    fontSize: 14,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    minimap: { enabled: true },
+                    padding: { top: 8 },
+                    scrollBeyondLastLine: false,
+                    smoothScrolling: true,
+                    lineNumbers: "on",
+                    renderLineHighlight: "all",
+                    bracketPairColorization: { enabled: true },
+                    automaticLayout: true,
+                  }}
                 />
-              </Panel>
-            </PanelGroup>
-          </Panel>
-          
-          <PanelResizeHandle className="w-1 bg-white/5 hover:bg-[#667eea]/50 transition-colors" />
-          
-          {/* Right Sidebar - Analysis */}
-          <Panel defaultSize={25} minSize={15} maxSize={40}>
-            <div className="h-full bg-[#252526] border-l border-white/10 overflow-auto">
-              {projectAnalysis ? (
-                <ProjectAnalysisPanel 
-                  analysis={projectAnalysis}
-                  onLoadFile={loadFile}
-                  onClose={() => setProjectAnalysis(null)}
-                />
-              ) : showAnalysis && bugs.length > 0 ? (
-                <div className="p-4">
-                  <h3 className="font-semibold mb-4 flex items-center gap-2">
-                    <Code className="w-4 h-4 text-[#667eea]" />
-                    Code Analysis
-                  </h3>
-                  <div className="space-y-3">
-                    {bugs.map((bug, i) => (
-                      <div 
-                        key={i}
-                        className="p-3 rounded-lg bg-white/5 cursor-pointer hover:bg-white/10"
-                        onClick={() => { setSelectedBug(bug); setShowTeaching(true); }}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`px-2 py-0.5 rounded text-xs ${
-                            bug.severity === 'critical' ? 'bg-[#EA4335]/20 text-[#EA4335]' :
-                            bug.severity === 'warning' ? 'bg-[#FBBC04]/20 text-[#FBBC04]' :
-                            'bg-[#4285F4]/20 text-[#4285F4]'
-                          }`}>
-                            {bug.severity}
-                          </span>
-                          <span className="text-xs text-white/50">Line {bug.line}</span>
-                        </div>
-                        <p className="text-sm text-white/80">{bug.message}</p>
-                        <p className="text-xs text-white/50 mt-1">{bug.suggestion}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               ) : (
-                <div className="p-4 text-center text-white/40">
-                  <Cpu className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-sm">Click "Full Analysis" to analyze</p>
-                  <p className="text-xs mt-1">the entire project structure</p>
+                <div className="h-full flex flex-col items-center justify-center text-white/40">
+                  <FolderOpen className="w-16 h-16 mb-4" />
+                  <p>Select a file from the explorer to edit</p>
+                  <p className="text-xs mt-2">or upload a new project</p>
                 </div>
               )}
             </div>
-          </Panel>
-        </PanelGroup>
+          </div>
+          
+          {/* Terminal */}
+          {showTerminal && (
+            <div className="h-[35%] border-t border-white/10">
+              <IDETerminal 
+                output={terminalOutput}
+                onCommand={executeCommand}
+                isRunning={isRunning}
+                onClear={() => setTerminalOutput([])}
+              />
+            </div>
+          )}
+        </div>
+        
+        {/* Right Sidebar - Analysis */}
+        <div className="h-full bg-[#252526] border-l border-white/10 overflow-auto">
+          {projectAnalysis ? (
+            <ProjectAnalysisPanel 
+              analysis={projectAnalysis}
+              onLoadFile={loadFile}
+              onClose={() => setProjectAnalysis(null)}
+            />
+          ) : showAnalysis && bugs.length > 0 ? (
+            <div className="p-4">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Code className="w-4 h-4 text-[#667eea]" />
+                Code Analysis
+              </h3>
+              <div className="space-y-3">
+                {bugs.map((bug, i) => (
+                  <div 
+                    key={i}
+                    className="p-3 rounded-lg bg-white/5 cursor-pointer hover:bg-white/10"
+                    onClick={() => { setSelectedBug(bug); setShowTeaching(true); }}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        bug.severity === 'critical' ? 'bg-[#EA4335]/20 text-[#EA4335]' :
+                        bug.severity === 'warning' ? 'bg-[#FBBC04]/20 text-[#FBBC04]' :
+                        'bg-[#4285F4]/20 text-[#4285F4]'
+                      }`}>
+                        {bug.severity}
+                      </span>
+                      <span className="text-xs text-white/50">Line {bug.line}</span>
+                    </div>
+                    <p className="text-sm text-white/80">{bug.message}</p>
+                    <p className="text-xs text-white/50 mt-1">{bug.suggestion}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 text-center text-white/40">
+              <Cpu className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p className="text-sm">Click "Full Analysis" to analyze</p>
+              <p className="text-xs mt-1">the entire project structure</p>
+            </div>
+          )}
+        </div>
       </div>
       
       {/* Modals */}
