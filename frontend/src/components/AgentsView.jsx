@@ -120,7 +120,6 @@ const AgentsView = () => {
       }]);
     }
   }, [activeAgent]);
-  }, [activeAgent]);
 
   const getWelcomeMessage = (agentType) => {
     switch (agentType) {
