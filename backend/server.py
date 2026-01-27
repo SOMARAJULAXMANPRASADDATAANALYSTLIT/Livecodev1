@@ -1720,17 +1720,20 @@ async def generate_agent_visual(
         agent_prompts = prompt_templates.get(agent_type, prompt_templates["coding"])
         prompt = agent_prompts.get(visual_type, agent_prompts.get("diagram", f"Educational diagram for {topic}"))
         
-        # Generate image using Nano Banana
-        image_gen = ImageGeneration(api_key=EMERGENT_LLM_KEY)
-        result = await image_gen.generate(
+        # Generate image using Gemini Image Generation
+        image_gen = GeminiImageGeneration(api_key=EMERGENT_LLM_KEY)
+        image_bytes_list = await image_gen.generate_images(
             prompt=prompt,
-            aspect_ratio="16:9"
+            number_of_images=1
         )
+        
+        # Convert first image to base64
+        image_base64 = base64.b64encode(image_bytes_list[0]).decode('utf-8') if image_bytes_list else None
         
         return {
             "success": True,
-            "image_url": result.url if hasattr(result, 'url') else None,
-            "image_base64": result.base64 if hasattr(result, 'base64') else None,
+            "image_url": None,
+            "image_base64": image_base64,
             "topic": topic,
             "visual_type": visual_type,
             "agent_type": agent_type
