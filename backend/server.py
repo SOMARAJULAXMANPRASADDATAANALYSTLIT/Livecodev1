@@ -2156,6 +2156,21 @@ def generate_html_report(data: dict) -> str:
     
     return html
 
+
+class HtmlReportRequest(BaseModel):
+    company_name: str
+    sheets: dict
+
+@api_router.post("/agent/html-report")
+async def generate_html_report_endpoint(request: HtmlReportRequest):
+    """Generate HTML report from business analysis data"""
+    try:
+        html = generate_html_report({"company_name": request.company_name, "sheets": request.sheets})
+        return {"html": html, "company_name": request.company_name}
+    except Exception as e:
+        logger.error(f"HTML report generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============== LEARNING PATH MENTOR SYSTEM ==============
 
 # Collections for learning path
