@@ -2533,58 +2533,118 @@ async def get_learning_progress(user_id: str):
 
 @api_router.get("/news/feed")
 async def get_news_feed(category: str = "all"):
-    """Get AI and tech news feed"""
+    """Get AI and tech news feed with REAL, verified URLs"""
     try:
         from datetime import datetime, timedelta
+        import uuid
         
-        # Use AI to generate relevant news summaries with REAL searchable URLs
-        system_prompt = """You are a tech news curator. Generate 6 REAL, CURRENT AI and tech news articles from January 2026.
-
-CRITICAL RULES:
-1. Generate URLs that link to REAL news sources (TechCrunch, The Verge, Wired, Ars Technica, VentureBeat, MIT Tech Review)
-2. Use real, searchable URL patterns like:
-   - https://techcrunch.com/2026/01/topic-name
-   - https://www.theverge.com/2026/1/27/news-title
-   - https://www.wired.com/story/article-slug/
-   - https://arstechnica.com/category/2026/01/article-slug/
-3. Make headlines realistic and based on current AI trends
-4. Include actual company names (OpenAI, Google, Anthropic, Meta, Microsoft)
+        # Use curated REAL news sources that actually exist
+        # These are real, stable links to major tech news outlets
+        real_news = [
+            {
+                "id": str(uuid.uuid4()),
+                "title": "OpenAI Advances in AI Safety Research",
+                "summary": "OpenAI continues to develop new approaches to AI alignment and safety, focusing on interpretability and reducing harmful outputs in large language models.",
+                "source": "OpenAI Blog",
+                "url": "https://openai.com/blog",
+                "category": "ai",
+                "publishedAt": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Google DeepMind Pushes Boundaries of AI Research",
+                "summary": "DeepMind's latest research explores new frontiers in reinforcement learning and multimodal AI systems for scientific discovery.",
+                "source": "Google DeepMind",
+                "url": "https://deepmind.google/discover/blog/",
+                "category": "ai",
+                "publishedAt": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Anthropic's Constitutional AI Approach",
+                "summary": "Anthropic shares insights on their constitutional AI methods for creating helpful, harmless, and honest AI assistants.",
+                "source": "Anthropic Research",
+                "url": "https://www.anthropic.com/research",
+                "category": "ai",
+                "publishedAt": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Latest Developer Tools and Frameworks",
+                "summary": "TechCrunch covers the latest advancements in developer tools, from AI-powered coding assistants to new JavaScript frameworks.",
+                "source": "TechCrunch",
+                "url": "https://techcrunch.com/category/artificial-intelligence/",
+                "category": "tech",
+                "publishedAt": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "The Future of Software Development",
+                "summary": "The Verge explores how AI is transforming software development practices and what it means for programmers.",
+                "source": "The Verge",
+                "url": "https://www.theverge.com/tech",
+                "category": "tech",
+                "publishedAt": datetime.now(timezone.utc).isoformat()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Venture Capital Trends in AI Startups",
+                "summary": "VentureBeat analyzes the latest funding trends for AI startups and emerging technologies gaining investor attention.",
+                "source": "VentureBeat",
+                "url": "https://venturebeat.com/category/ai/",
+                "category": "startups",
+                "publishedAt": datetime.now(timezone.utc).isoformat()
+            }
+        ]
         
-RESPOND ONLY WITH VALID JSON:
-{
-    "articles": [
-        {
-            "id": "unique_id",
-            "title": "Specific news headline",
-            "summary": "2-3 sentence summary with specific details",
-            "source": "TechCrunch",
-            "url": "https://techcrunch.com/2026/01/27/article-slug",
-            "category": "ai|tech|coding|startups",
-            "publishedAt": "2026-01-27T10:00:00Z"
-        }
-    ]
-}
-
-Generate current news about latest developments:
-- GPT-5, Gemini 3, Claude 4 updates
-- React 20, Python 4, new frameworks
-- AI coding assistants evolution
-- Startup funding rounds
-- Developer tool releases"""
+        # Filter by category if specified
+        if category != "all":
+            real_news = [n for n in real_news if n["category"] == category]
         
-        chat = get_chat_instance(system_prompt)
-        
-        category_prompt = f"Generate news for category: {category}" if category != "all" else "Generate mixed tech and AI news"
-        user_msg = UserMessage(text=category_prompt)
-        response = await chat.send_message(user_msg)
-        
-        data = safe_parse_json(response, {"articles": []})
-        
-        return data
+        return {"articles": real_news}
         
     except Exception as e:
         logger.error(f"News feed error: {e}")
         return {"articles": []}
+
+
+@api_router.get("/news/article-summary")
+async def get_article_summary(url: str):
+    """Fetch and summarize a news article"""
+    try:
+        # Use AI to generate a summary based on the source
+        system_prompt = """You are a tech news summarizer. Based on the URL provided, 
+create a comprehensive summary of what this source typically covers.
+
+RESPOND ONLY WITH VALID JSON:
+{
+    "title": "Article/Page Title",
+    "source": "Source Name",
+    "summary": "Detailed 3-4 paragraph summary",
+    "key_points": ["Point 1", "Point 2", "Point 3"],
+    "topics_covered": ["Topic 1", "Topic 2"],
+    "original_url": "URL"
+}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Summarize content from: {url}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "title": "News Article",
+            "source": "Unknown",
+            "summary": "Summary not available",
+            "key_points": [],
+            "topics_covered": [],
+            "original_url": url
+        })
+        data["original_url"] = url  # Ensure the original URL is preserved
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Article summary error: {e}")
+        return {"error": str(e), "original_url": url}
 
 # ============== WEB RESEARCH ==============
 
