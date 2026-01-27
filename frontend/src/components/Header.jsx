@@ -1,4 +1,4 @@
-import { Code, Globe } from "lucide-react";
+import { Code, Globe, MonitorPlay, Sparkles } from "lucide-react";
 
 const Header = ({ mode, onModeChange }) => {
   return (
@@ -17,7 +17,7 @@ const Header = ({ mode, onModeChange }) => {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight">Live Code Mentor</h1>
-            <p className="text-xs text-white/50 hidden sm:block">AI-Powered Learning</p>
+            <p className="text-xs text-white/50 hidden sm:block">AI-Powered IDE & Learning Platform</p>
           </div>
         </div>
 
@@ -26,6 +26,20 @@ const Header = ({ mode, onModeChange }) => {
           data-testid="mode-switcher"
           className="flex items-center gap-1 p-1 rounded-full glass-light"
         >
+          <button
+            data-testid="mode-ide-btn"
+            onClick={() => onModeChange("ide")}
+            className={`
+              flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-300
+              ${mode === "ide" 
+                ? "mode-active text-white" 
+                : "text-white/60 hover:text-white hover:bg-white/5"
+              }
+            `}
+          >
+            <MonitorPlay className="w-4 h-4" />
+            <span className="hidden sm:inline">IDE</span>
+          </button>
           <button
             data-testid="mode-code-btn"
             onClick={() => onModeChange("code")}
@@ -38,7 +52,7 @@ const Header = ({ mode, onModeChange }) => {
             `}
           >
             <Code className="w-4 h-4" />
-            <span className="hidden sm:inline">Code Learning</span>
+            <span className="hidden sm:inline">Code Editor</span>
           </button>
           <button
             data-testid="mode-english-btn"
@@ -52,8 +66,14 @@ const Header = ({ mode, onModeChange }) => {
             `}
           >
             <Globe className="w-4 h-4" />
-            <span className="hidden sm:inline">English Learning</span>
+            <span className="hidden sm:inline">English</span>
           </button>
+        </div>
+        
+        {/* Status Badge */}
+        <div className="hidden md:flex items-center gap-2 text-xs text-white/50">
+          <Sparkles className="w-3 h-3 text-[#667eea]" />
+          <span>Powered by Gemini AI</span>
         </div>
       </div>
     </header>
