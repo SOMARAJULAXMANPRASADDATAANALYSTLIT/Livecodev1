@@ -1690,7 +1690,7 @@ async def generate_agent_visual(
 ):
     """Generate visual diagram/image for agent response"""
     try:
-        from emergentintegrations.llm.nano_banana import ImageGeneration
+        from emergentintegrations.llm.chat import ImageGeneration
         
         # Create appropriate prompts based on agent type
         prompt_templates = {
