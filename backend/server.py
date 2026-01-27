@@ -1690,45 +1690,53 @@ async def generate_agent_visual(
 ):
     """Generate visual diagram/image for agent response"""
     try:
-        from emergentintegrations.llm.gemeni.image_generation import GeminiImageGeneration
         import base64
+        import uuid
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
         
         # Create appropriate prompts based on agent type
         prompt_templates = {
             "coding": {
-                "diagram": f"Technical architecture diagram showing {topic}. Clean, professional software engineering diagram style with labeled components and connections. Dark theme, modern design.",
-                "flowchart": f"Software flowchart for {topic}. Clear decision points, process steps, color coded. Professional technical documentation style.",
-                "architecture": f"System architecture diagram for {topic}. Microservices, APIs, databases clearly labeled. Modern cloud architecture visualization."
+                "diagram": f"Create a clean technical architecture diagram showing {topic}. Professional software engineering style with labeled components and connections. Dark theme, modern design.",
+                "flowchart": f"Create a software flowchart for {topic}. Clear decision points, process steps, color coded boxes. Professional technical documentation style.",
+                "architecture": f"Create a system architecture diagram for {topic}. Show microservices, APIs, databases clearly labeled. Modern cloud architecture visualization."
             },
             "health": {
-                "diagram": f"Medical educational diagram showing {topic}. Clean, labeled, professional medical illustration. Anatomically accurate with clear annotations.",
-                "anatomy": f"Human anatomy illustration of {topic}. Educational medical style, clearly labeled parts.",
-                "timeline": f"Medical timeline showing progression of {topic}. Clear stages, visual markers, educational style."
+                "diagram": f"Create a medical educational diagram showing {topic}. Clean, labeled, professional medical illustration. Anatomically accurate with clear annotations.",
+                "anatomy": f"Create a human anatomy illustration of {topic}. Educational medical style, clearly labeled parts.",
+                "timeline": f"Create a medical timeline showing progression of {topic}. Clear stages, visual markers, educational style."
             },
             "travel": {
-                "diagram": f"Travel route map for {topic}. Beautiful illustrated map style with landmarks, routes, and key destinations marked.",
-                "map": f"Illustrated travel map of {topic}. Tourist map style with attractions, routes, and helpful icons.",
-                "itinerary": f"Visual travel itinerary for {topic}. Day-by-day visual guide with icons and timeline."
+                "diagram": f"Create a travel route map for {topic}. Beautiful illustrated map style with landmarks, routes, and key destinations marked.",
+                "map": f"Create an illustrated travel map of {topic}. Tourist map style with attractions, routes, and helpful icons.",
+                "itinerary": f"Create a visual travel itinerary for {topic}. Day-by-day visual guide with icons and timeline."
             },
             "business": {
-                "diagram": f"Business strategy diagram for {topic}. Professional consulting style with clear hierarchy and relationships.",
-                "chart": f"Business analysis chart for {topic}. Clean data visualization, modern corporate style.",
-                "comparison": f"Competitive analysis visual comparison of {topic}. Side by side with clear differentiators."
+                "diagram": f"Create a business strategy diagram for {topic}. Professional consulting style with clear hierarchy and relationships.",
+                "chart": f"Create a business analysis chart for {topic}. Clean data visualization, modern corporate style.",
+                "comparison": f"Create a competitive analysis visual comparison of {topic}. Side by side with clear differentiators."
             }
         }
         
         agent_prompts = prompt_templates.get(agent_type, prompt_templates["coding"])
-        prompt = agent_prompts.get(visual_type, agent_prompts.get("diagram", f"Educational diagram for {topic}"))
+        prompt = agent_prompts.get(visual_type, agent_prompts.get("diagram", f"Create an educational diagram for {topic}"))
         
-        # Generate image using Gemini Image Generation
-        image_gen = GeminiImageGeneration(api_key=EMERGENT_LLM_KEY)
-        image_bytes_list = await image_gen.generate_images(
-            prompt=prompt,
-            number_of_images=1
+        # Generate image using LlmChat with multimodal
+        session_id = str(uuid.uuid4())
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY, 
+            session_id=session_id, 
+            system_message="You are a professional diagram and visualization creator."
         )
+        chat.with_model("gemini", "gemini-3-pro-image-preview").with_params(modalities=["image", "text"])
         
-        # Convert first image to base64
-        image_base64 = base64.b64encode(image_bytes_list[0]).decode('utf-8') if image_bytes_list else None
+        msg = UserMessage(text=prompt)
+        text_response, images = await chat.send_message_multimodal_response(msg)
+        
+        # Get the first image if available
+        image_base64 = None
+        if images and len(images) > 0:
+            image_base64 = images[0].get('data', None)
         
         return {
             "success": True,
@@ -1736,7 +1744,8 @@ async def generate_agent_visual(
             "image_base64": image_base64,
             "topic": topic,
             "visual_type": visual_type,
-            "agent_type": agent_type
+            "agent_type": agent_type,
+            "text_response": text_response
         }
         
     except Exception as e:
