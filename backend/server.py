@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -14,6 +14,9 @@ import zipfile
 import io
 import tempfile
 import base64
+import subprocess
+import asyncio
+import shutil
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -26,32 +29,37 @@ db = client[os.environ.get('DB_NAME', 'live_code_mentor')]
 # Collections
 sessions_collection = db.sessions
 projects_collection = db.projects
+workspaces_collection = db.workspaces
 
 # Emergent LLM Setup
 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
-app = FastAPI(title="Live Code Mentor API")
+app = FastAPI(title="Live Code Mentor - AI IDE API")
 api_router = APIRouter(prefix="/api")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Workspace directory for project execution
+WORKSPACE_DIR = Path("/tmp/live_code_mentor_workspaces")
+WORKSPACE_DIR.mkdir(exist_ok=True)
+
 # ============== SKILL LEVEL DEFINITIONS ==============
 
 SKILL_LEVEL_PROMPTS = {
     "beginner": {
-        "tone": "Be extremely patient, warm, and encouraging. Use simple language and real-world analogies. Explain like teaching a complete newcomer.",
+        "tone": "Be extremely patient, warm, and encouraging. Use simple language and real-world analogies.",
         "depth": "Focus on basic syntax and fundamental concepts. Avoid advanced topics unless asked.",
         "vocabulary": "Use simple terms. Define any technical jargon before using it.",
-        "approach": "Step-by-step explanations. Celebrate small wins. Never overwhelm with too much information at once."
+        "approach": "Step-by-step explanations. Celebrate small wins. Never overwhelm."
     },
     "intermediate": {
         "tone": "Be supportive and constructive. Balance explanation with reasoning.",
         "depth": "Explain common patterns, debugging techniques, and best practices.",
-        "vocabulary": "Use standard programming terminology with brief clarifications when needed.",
+        "vocabulary": "Use standard programming terminology with brief clarifications.",
         "approach": "Provide context and reasoning. Encourage exploration of alternatives."
     },
     "advanced": {
@@ -68,14 +76,118 @@ SKILL_LEVEL_PROMPTS = {
     }
 }
 
-MENTOR_PERSONAS = {
-    "junior_tutor": "Focus on syntax, simple explanations, encouragement. Be like a friendly teaching assistant.",
-    "intermediate_coach": "Focus on logic flow, common patterns, debugging techniques. Be like a supportive coach.",
-    "advanced_architect": "Focus on performance, code structure, refactoring. Be like a technical lead.",
-    "senior_engineer": "Focus on production-ready fixes, edge cases, error handling, security, scalability. Be like a principal engineer."
+# ============== LANGUAGE DETECTION ==============
+
+LANGUAGE_EXTENSIONS = {
+    '.py': {'name': 'Python', 'color': '#3572A5'},
+    '.js': {'name': 'JavaScript', 'color': '#f1e05a'},
+    '.ts': {'name': 'TypeScript', 'color': '#2b7489'},
+    '.jsx': {'name': 'JavaScript', 'color': '#f1e05a'},
+    '.tsx': {'name': 'TypeScript', 'color': '#2b7489'},
+    '.java': {'name': 'Java', 'color': '#b07219'},
+    '.cpp': {'name': 'C++', 'color': '#f34b7d'},
+    '.c': {'name': 'C', 'color': '#555555'},
+    '.h': {'name': 'C/C++ Header', 'color': '#555555'},
+    '.hpp': {'name': 'C++', 'color': '#f34b7d'},
+    '.go': {'name': 'Go', 'color': '#00ADD8'},
+    '.rs': {'name': 'Rust', 'color': '#dea584'},
+    '.rb': {'name': 'Ruby', 'color': '#701516'},
+    '.php': {'name': 'PHP', 'color': '#4F5D95'},
+    '.cs': {'name': 'C#', 'color': '#178600'},
+    '.swift': {'name': 'Swift', 'color': '#ffac45'},
+    '.kt': {'name': 'Kotlin', 'color': '#F18E33'},
+    '.scala': {'name': 'Scala', 'color': '#c22d40'},
+    '.sql': {'name': 'SQL', 'color': '#e38c00'},
+    '.html': {'name': 'HTML', 'color': '#e34c26'},
+    '.css': {'name': 'CSS', 'color': '#563d7c'},
+    '.scss': {'name': 'SCSS', 'color': '#c6538c'},
+    '.sass': {'name': 'Sass', 'color': '#a53b70'},
+    '.less': {'name': 'Less', 'color': '#1d365d'},
+    '.json': {'name': 'JSON', 'color': '#292929'},
+    '.xml': {'name': 'XML', 'color': '#0060ac'},
+    '.yaml': {'name': 'YAML', 'color': '#cb171e'},
+    '.yml': {'name': 'YAML', 'color': '#cb171e'},
+    '.md': {'name': 'Markdown', 'color': '#083fa1'},
+    '.sh': {'name': 'Shell', 'color': '#89e051'},
+    '.bash': {'name': 'Bash', 'color': '#89e051'},
+    '.vue': {'name': 'Vue', 'color': '#41b883'},
+    '.svelte': {'name': 'Svelte', 'color': '#ff3e00'},
+    '.dart': {'name': 'Dart', 'color': '#00B4AB'},
+    '.r': {'name': 'R', 'color': '#198CE7'},
+    '.lua': {'name': 'Lua', 'color': '#000080'},
+    '.pl': {'name': 'Perl', 'color': '#0298c3'},
+    '.ex': {'name': 'Elixir', 'color': '#6e4a7e'},
+    '.exs': {'name': 'Elixir', 'color': '#6e4a7e'},
+    '.erl': {'name': 'Erlang', 'color': '#B83998'},
+    '.hs': {'name': 'Haskell', 'color': '#5e5086'},
+    '.clj': {'name': 'Clojure', 'color': '#db5855'},
+    '.dockerfile': {'name': 'Dockerfile', 'color': '#384d54'},
+    '.toml': {'name': 'TOML', 'color': '#9c4221'},
+    '.ini': {'name': 'INI', 'color': '#d1dbe0'},
+    '.env': {'name': 'Environment', 'color': '#faf743'},
+    '.graphql': {'name': 'GraphQL', 'color': '#e10098'},
+    '.proto': {'name': 'Protocol Buffers', 'color': '#5592b5'},
 }
 
 # ============== MODELS ==============
+
+class FileNode(BaseModel):
+    name: str
+    path: str
+    type: str  # 'file' or 'directory'
+    language: Optional[str] = None
+    size: Optional[int] = None
+    children: Optional[List['FileNode']] = None
+
+FileNode.model_rebuild()
+
+class LanguageStats(BaseModel):
+    name: str
+    percentage: float
+    bytes: int
+    color: str
+    file_count: int
+
+class ProjectStructure(BaseModel):
+    project_id: str
+    name: str
+    root: FileNode
+    languages: List[LanguageStats]
+    total_files: int
+    total_size: int
+    entry_points: List[str]
+    frameworks: List[str]
+    build_system: Optional[str] = None
+    has_tests: bool
+    readme_content: Optional[str] = None
+
+class FileContent(BaseModel):
+    path: str
+    content: str
+    language: str
+
+class SaveFileRequest(BaseModel):
+    project_id: str
+    path: str
+    content: str
+
+class RunProjectRequest(BaseModel):
+    project_id: str
+    command: Optional[str] = None
+    file_path: Optional[str] = None
+    skill_level: str = "intermediate"
+
+class RunProjectResponse(BaseModel):
+    output: str
+    error: Optional[str] = None
+    exit_code: int
+    execution_time: float
+    error_explanation: Optional[str] = None
+    fix_suggestion: Optional[str] = None
+
+class TerminalCommand(BaseModel):
+    project_id: str
+    command: str
 
 class CodeAnalysisRequest(BaseModel):
     code: str
@@ -124,17 +236,62 @@ class VisualDiagramRequest(BaseModel):
 class VisualDiagramResponse(BaseModel):
     svg: str
 
-class EvaluateAnswerRequest(BaseModel):
-    question: str
-    studentAnswer: str
-    correctConcept: str
+class LineMentoringRequest(BaseModel):
+    code: str
+    language: str
+    selected_lines: List[int]
+    full_context: str = ""
+    skill_level: str = "intermediate"
+    question: Optional[str] = None
+
+class LineMentoringResponse(BaseModel):
+    explanation: str
+    what_it_does: str
+    potential_issues: List[str]
+    improvement_suggestions: List[str]
+    corrected_code: Optional[str] = None
+    teaching_points: List[str]
+
+class FixCodeRequest(BaseModel):
+    code: str
+    language: str
+    bugs: List[dict] = []
+    skill_level: str = "intermediate"
+    apply_inline_comments: bool = False
+
+class FixCodeResponse(BaseModel):
+    fixed_code: str
+    explanation: str
+    changes_made: List[str]
+
+class ProactiveMentorRequest(BaseModel):
+    code: str
+    language: str
     skill_level: str = "intermediate"
 
-class EvaluateAnswerResponse(BaseModel):
-    understood: bool
-    feedback: str
-    encouragement: str
-    follow_up_question: Optional[str] = None
+class ProactiveMentorResponse(BaseModel):
+    has_issue: bool
+    issue_type: Optional[str] = None
+    message: Optional[str] = None
+    severity: str = "info"
+    quick_fix: Optional[str] = None
+
+class ProjectAnalysisRequest(BaseModel):
+    project_id: str
+    skill_level: str = "intermediate"
+
+class FullProjectAnalysis(BaseModel):
+    project_name: str
+    purpose: str
+    architecture_overview: str
+    entry_points: List[dict]
+    main_modules: List[dict]
+    dependencies: List[str]
+    frameworks: List[str]
+    learning_roadmap: dict
+    file_recommendations: List[dict]
+    potential_issues: List[str]
+    improvement_suggestions: List[str]
 
 class ChatMessage(BaseModel):
     role: str
@@ -154,131 +311,9 @@ class EnglishChatResponse(BaseModel):
     intent: str
     corrections: List[Correction]
 
-class ImageAnalysisRequest(BaseModel):
-    image_data: str
-    task_type: str
-    additional_context: Optional[str] = ""
-    skill_level: str = "intermediate"
-
-class ImageAnalysisResponse(BaseModel):
-    analysis: str
-    task_type: str
-
-class FixCodeRequest(BaseModel):
-    code: str
-    language: str
-    bugs: List[dict] = []
-    skill_level: str = "intermediate"
-    apply_inline_comments: bool = False
-
-class FixCodeResponse(BaseModel):
-    fixed_code: str
-    explanation: str
-    changes_made: List[str]
-
-# ============== NEW MODELS FOR ENHANCED FEATURES ==============
-
-class LineMentoringRequest(BaseModel):
-    code: str
-    language: str
-    selected_lines: List[int]
-    full_context: str = ""
-    skill_level: str = "intermediate"
-    question: Optional[str] = None
-
-class LineMentoringResponse(BaseModel):
-    explanation: str
-    what_it_does: str
-    potential_issues: List[str]
-    improvement_suggestions: List[str]
-    corrected_code: Optional[str] = None
-    teaching_points: List[str]
-
-class SessionMemoryRequest(BaseModel):
-    session_id: str
-    issue_type: str
-    issue_description: str
-    fix_applied: str
-    skill_level: str = "intermediate"
-
-class SessionMemoryResponse(BaseModel):
-    stored: bool
-    message: str
-
-class CheckRepetitionRequest(BaseModel):
-    session_id: str
-    current_issue: str
-    code_context: str
-
-class CheckRepetitionResponse(BaseModel):
-    is_repeated: bool
-    previous_fix: Optional[str] = None
-    escalation_message: Optional[str] = None
-    higher_level_tip: Optional[str] = None
-
-class ProjectFile(BaseModel):
-    path: str
-    content: str
-    language: str
-
-class ProjectAnalysisResponse(BaseModel):
-    project_name: str
-    purpose: str
-    entry_points: List[str]
-    main_modules: List[dict]
-    dependencies: List[str]
-    architecture_overview: str
-    learning_roadmap: dict
-
-class LearningJourneyRequest(BaseModel):
-    project_id: str
-    skill_level: str = "intermediate"
-    focus_area: Optional[str] = None
-
-class LearningJourneyResponse(BaseModel):
-    journey_steps: List[dict]
-    estimated_time: str
-    key_concepts: List[str]
-
-class CodeExecutionRequest(BaseModel):
-    code: str
-    language: str
-    skill_level: str = "intermediate"
-
-class CodeExecutionResponse(BaseModel):
-    output: str
-    error: Optional[str] = None
-    execution_time: float
-    error_explanation: Optional[str] = None
-    fix_suggestion: Optional[str] = None
-
-class ProactiveMentorRequest(BaseModel):
-    code: str
-    language: str
-    skill_level: str = "intermediate"
-    cursor_position: Optional[int] = None
-
-class ProactiveMentorResponse(BaseModel):
-    has_issue: bool
-    issue_type: Optional[str] = None
-    message: Optional[str] = None
-    severity: str = "info"
-    quick_fix: Optional[str] = None
-
-class SmartQuestionRequest(BaseModel):
-    concept_taught: str
-    skill_level: str = "intermediate"
-    previous_questions: List[str] = []
-
-class SmartQuestionResponse(BaseModel):
-    question: str
-    expected_answer_hints: List[str]
-    difficulty: str
-
 # ============== HELPER FUNCTIONS ==============
 
 def get_skill_context(skill_level: str) -> str:
-    """Generate context string based on skill level"""
     level_data = SKILL_LEVEL_PROMPTS.get(skill_level, SKILL_LEVEL_PROMPTS["intermediate"])
     return f"""
 SKILL LEVEL: {skill_level.upper()}
@@ -288,62 +323,235 @@ SKILL LEVEL: {skill_level.upper()}
 - Approach: {level_data['approach']}
 """
 
-def get_mentor_persona(skill_level: str) -> str:
-    """Get appropriate mentor persona based on skill level"""
-    persona_map = {
-        "beginner": "junior_tutor",
-        "intermediate": "intermediate_coach",
-        "advanced": "advanced_architect",
-        "senior": "senior_engineer"
-    }
-    persona_key = persona_map.get(skill_level, "intermediate_coach")
-    return MENTOR_PERSONAS[persona_key]
-
 def get_chat_instance(system_message: str, session_id: str = None):
-    """Create a new LlmChat instance for each request"""
     if not session_id:
         session_id = str(uuid.uuid4())
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=session_id,
         system_message=system_message
-    ).with_model("gemini", "gemini-3-flash-preview")
+    ).with_model("gemini", "gemini-2.0-flash")
     return chat
 
 def safe_parse_json(response: str, default: dict = None) -> dict:
-    """Safely parse JSON from AI response"""
     if default is None:
         default = {}
-    
     if not response:
         return default
-    
     try:
         clean_response = response.strip()
-        # Remove markdown code blocks if present
         if clean_response.startswith("```"):
             lines = clean_response.split("\n")
             lines = lines[1:]
             if lines and lines[-1].strip() == "```":
                 lines = lines[:-1]
             clean_response = "\n".join(lines)
-        
         return json.loads(clean_response)
     except (json.JSONDecodeError, AttributeError):
         return default
 
-def detect_language_from_extension(filename: str) -> str:
-    """Detect programming language from file extension"""
-    ext_map = {
-        '.py': 'python', '.js': 'javascript', '.ts': 'typescript',
-        '.jsx': 'javascript', '.tsx': 'typescript', '.java': 'java',
-        '.cpp': 'cpp', '.c': 'c', '.h': 'cpp', '.hpp': 'cpp',
-        '.go': 'go', '.rs': 'rust', '.rb': 'ruby', '.php': 'php',
-        '.cs': 'csharp', '.sql': 'sql', '.html': 'html', '.css': 'css',
-        '.json': 'json', '.md': 'markdown', '.yaml': 'yaml', '.yml': 'yaml'
-    }
+def detect_language(filename: str) -> Optional[str]:
     ext = Path(filename).suffix.lower()
-    return ext_map.get(ext, 'text')
+    if ext in LANGUAGE_EXTENSIONS:
+        return LANGUAGE_EXTENSIONS[ext]['name'].lower()
+    return None
+
+def get_language_info(filename: str) -> dict:
+    ext = Path(filename).suffix.lower()
+    return LANGUAGE_EXTENSIONS.get(ext, {'name': 'Unknown', 'color': '#808080'})
+
+def build_file_tree(directory: Path, base_path: str = "") -> FileNode:
+    """Build a file tree structure from a directory"""
+    name = directory.name or "root"
+    children = []
+    
+    try:
+        items = sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+        for item in items:
+            if item.name.startswith('.') and item.name not in ['.env', '.gitignore', '.eslintrc']:
+                continue
+            if item.name in ['node_modules', '__pycache__', '.git', 'venv', 'env', 'dist', 'build', '.next']:
+                continue
+                
+            rel_path = f"{base_path}/{item.name}" if base_path else item.name
+            
+            if item.is_dir():
+                child_node = build_file_tree(item, rel_path)
+                if child_node.children:  # Only include non-empty directories
+                    children.append(child_node)
+            else:
+                lang_info = get_language_info(item.name)
+                children.append(FileNode(
+                    name=item.name,
+                    path=rel_path,
+                    type='file',
+                    language=lang_info['name'],
+                    size=item.stat().st_size
+                ))
+    except PermissionError:
+        pass
+    
+    return FileNode(
+        name=name,
+        path=base_path or "/",
+        type='directory',
+        children=children
+    )
+
+def calculate_language_stats(directory: Path) -> List[LanguageStats]:
+    """Calculate language statistics like GitHub"""
+    lang_bytes = {}
+    lang_files = {}
+    
+    def scan_files(dir_path: Path):
+        try:
+            for item in dir_path.iterdir():
+                if item.name.startswith('.'):
+                    continue
+                if item.name in ['node_modules', '__pycache__', '.git', 'venv', 'env', 'dist', 'build']:
+                    continue
+                    
+                if item.is_dir():
+                    scan_files(item)
+                elif item.is_file():
+                    ext = item.suffix.lower()
+                    if ext in LANGUAGE_EXTENSIONS:
+                        lang_info = LANGUAGE_EXTENSIONS[ext]
+                        lang_name = lang_info['name']
+                        size = item.stat().st_size
+                        
+                        if lang_name not in lang_bytes:
+                            lang_bytes[lang_name] = 0
+                            lang_files[lang_name] = 0
+                        lang_bytes[lang_name] += size
+                        lang_files[lang_name] += 1
+        except PermissionError:
+            pass
+    
+    scan_files(directory)
+    
+    total_bytes = sum(lang_bytes.values()) or 1
+    
+    stats = []
+    for lang_name, bytes_count in sorted(lang_bytes.items(), key=lambda x: -x[1]):
+        ext = next((k for k, v in LANGUAGE_EXTENSIONS.items() if v['name'] == lang_name), None)
+        color = LANGUAGE_EXTENSIONS.get(ext, {}).get('color', '#808080')
+        
+        stats.append(LanguageStats(
+            name=lang_name,
+            percentage=round((bytes_count / total_bytes) * 100, 1),
+            bytes=bytes_count,
+            color=color,
+            file_count=lang_files[lang_name]
+        ))
+    
+    return stats[:10]  # Top 10 languages
+
+def detect_frameworks_and_entry_points(directory: Path) -> tuple:
+    """Detect frameworks, entry points, and build systems"""
+    frameworks = []
+    entry_points = []
+    build_system = None
+    has_tests = False
+    
+    files_in_root = [f.name for f in directory.iterdir() if f.is_file()]
+    dirs_in_root = [d.name for d in directory.iterdir() if d.is_dir()]
+    
+    # Node.js / JavaScript
+    if 'package.json' in files_in_root:
+        try:
+            pkg = json.loads((directory / 'package.json').read_text())
+            deps = {**pkg.get('dependencies', {}), **pkg.get('devDependencies', {})}
+            
+            if 'react' in deps:
+                frameworks.append('React')
+            if 'vue' in deps:
+                frameworks.append('Vue.js')
+            if 'angular' in deps or '@angular/core' in deps:
+                frameworks.append('Angular')
+            if 'next' in deps:
+                frameworks.append('Next.js')
+            if 'express' in deps:
+                frameworks.append('Express.js')
+            if 'fastify' in deps:
+                frameworks.append('Fastify')
+            if 'nestjs' in deps or '@nestjs/core' in deps:
+                frameworks.append('NestJS')
+            if 'svelte' in deps:
+                frameworks.append('Svelte')
+            
+            # Entry points
+            if pkg.get('main'):
+                entry_points.append(pkg['main'])
+            if 'scripts' in pkg:
+                if 'start' in pkg['scripts']:
+                    entry_points.append('npm start')
+            
+            build_system = 'npm/yarn'
+            
+            if 'jest' in deps or 'mocha' in deps or 'vitest' in deps:
+                has_tests = True
+        except:
+            pass
+    
+    # Python
+    if 'requirements.txt' in files_in_root or 'setup.py' in files_in_root or 'pyproject.toml' in files_in_root:
+        build_system = build_system or 'pip'
+        
+        # Check for frameworks
+        req_file = directory / 'requirements.txt'
+        if req_file.exists():
+            try:
+                reqs = req_file.read_text().lower()
+                if 'django' in reqs:
+                    frameworks.append('Django')
+                if 'flask' in reqs:
+                    frameworks.append('Flask')
+                if 'fastapi' in reqs:
+                    frameworks.append('FastAPI')
+                if 'pytorch' in reqs or 'torch' in reqs:
+                    frameworks.append('PyTorch')
+                if 'tensorflow' in reqs:
+                    frameworks.append('TensorFlow')
+                if 'pytest' in reqs:
+                    has_tests = True
+            except:
+                pass
+        
+        # Common Python entry points
+        for ep in ['main.py', 'app.py', 'server.py', 'manage.py', 'run.py', '__main__.py']:
+            if ep in files_in_root:
+                entry_points.append(ep)
+    
+    # Java / Kotlin
+    if 'pom.xml' in files_in_root:
+        build_system = 'Maven'
+        frameworks.append('Java/Maven')
+    if 'build.gradle' in files_in_root or 'build.gradle.kts' in files_in_root:
+        build_system = 'Gradle'
+        frameworks.append('Java/Gradle')
+    
+    # Go
+    if 'go.mod' in files_in_root:
+        build_system = 'Go Modules'
+        frameworks.append('Go')
+        if 'main.go' in files_in_root:
+            entry_points.append('main.go')
+    
+    # Rust
+    if 'Cargo.toml' in files_in_root:
+        build_system = 'Cargo'
+        frameworks.append('Rust')
+    
+    # Docker
+    if 'Dockerfile' in files_in_root or 'docker-compose.yml' in files_in_root:
+        frameworks.append('Docker')
+    
+    # Tests detection
+    if 'tests' in dirs_in_root or 'test' in dirs_in_root or '__tests__' in dirs_in_root:
+        has_tests = True
+    
+    return frameworks, entry_points, build_system, has_tests
 
 # ============== API ENDPOINTS ==============
 
@@ -351,38 +559,562 @@ def detect_language_from_extension(filename: str) -> str:
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
 
+# ============== PROJECT / IDE ENDPOINTS ==============
+
+@api_router.post("/upload-project")
+async def upload_project(file: UploadFile = File(...)):
+    """Upload and extract a project ZIP file"""
+    try:
+        project_id = str(uuid.uuid4())
+        workspace_path = WORKSPACE_DIR / project_id
+        workspace_path.mkdir(parents=True, exist_ok=True)
+        
+        # Read and extract ZIP
+        content = await file.read()
+        
+        with zipfile.ZipFile(io.BytesIO(content), 'r') as zip_ref:
+            zip_ref.extractall(workspace_path)
+        
+        # Handle nested directory (common in GitHub downloads)
+        items = list(workspace_path.iterdir())
+        if len(items) == 1 and items[0].is_dir():
+            nested_dir = items[0]
+            for item in nested_dir.iterdir():
+                shutil.move(str(item), str(workspace_path / item.name))
+            nested_dir.rmdir()
+        
+        # Build file tree
+        file_tree = build_file_tree(workspace_path)
+        
+        # Calculate language stats
+        language_stats = calculate_language_stats(workspace_path)
+        
+        # Detect frameworks and entry points
+        frameworks, entry_points, build_system, has_tests = detect_frameworks_and_entry_points(workspace_path)
+        
+        # Get README content if exists
+        readme_content = None
+        for readme_name in ['README.md', 'readme.md', 'README.txt', 'README']:
+            readme_path = workspace_path / readme_name
+            if readme_path.exists():
+                try:
+                    readme_content = readme_path.read_text()[:5000]  # Limit size
+                except:
+                    pass
+                break
+        
+        # Count total files and size
+        total_files = 0
+        total_size = 0
+        for root, dirs, files in os.walk(workspace_path):
+            dirs[:] = [d for d in dirs if d not in ['node_modules', '__pycache__', '.git', 'venv']]
+            total_files += len(files)
+            total_size += sum(os.path.getsize(os.path.join(root, f)) for f in files)
+        
+        # Store project info in database
+        project_data = {
+            "project_id": project_id,
+            "name": file.filename.replace('.zip', ''),
+            "workspace_path": str(workspace_path),
+            "languages": [ls.model_dump() for ls in language_stats],
+            "frameworks": frameworks,
+            "entry_points": entry_points,
+            "build_system": build_system,
+            "has_tests": has_tests,
+            "total_files": total_files,
+            "total_size": total_size,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await projects_collection.insert_one(project_data)
+        
+        return ProjectStructure(
+            project_id=project_id,
+            name=file.filename.replace('.zip', ''),
+            root=file_tree,
+            languages=language_stats,
+            total_files=total_files,
+            total_size=total_size,
+            entry_points=entry_points,
+            frameworks=frameworks,
+            build_system=build_system,
+            has_tests=has_tests,
+            readme_content=readme_content
+        )
+        
+    except Exception as e:
+        logger.error(f"Project upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/project/{project_id}/file")
+async def get_file_content(project_id: str, path: str):
+    """Get content of a specific file"""
+    try:
+        project = await projects_collection.find_one({"project_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        workspace_path = Path(project['workspace_path'])
+        file_path = workspace_path / path
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        if not file_path.is_file():
+            raise HTTPException(status_code=400, detail="Path is not a file")
+        
+        # Check file size (limit to 1MB)
+        if file_path.stat().st_size > 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large")
+        
+        content = file_path.read_text(errors='replace')
+        lang_info = get_language_info(file_path.name)
+        
+        return FileContent(
+            path=path,
+            content=content,
+            language=lang_info['name'].lower()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get file error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/project/{project_id}/file")
+async def save_file(project_id: str, request: SaveFileRequest):
+    """Save/update a file in the project"""
+    try:
+        project = await projects_collection.find_one({"project_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        workspace_path = Path(project['workspace_path'])
+        file_path = workspace_path / request.path
+        
+        # Ensure path is within workspace
+        if not str(file_path.resolve()).startswith(str(workspace_path.resolve())):
+            raise HTTPException(status_code=400, detail="Invalid path")
+        
+        # Create parent directories if needed
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write file
+        file_path.write_text(request.content)
+        
+        return {"success": True, "path": request.path}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Save file error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/project/{project_id}/run", response_model=RunProjectResponse)
+async def run_project(project_id: str, request: RunProjectRequest):
+    """Run a project or specific file"""
+    try:
+        project = await projects_collection.find_one({"project_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        workspace_path = Path(project['workspace_path'])
+        skill_context = get_skill_context(request.skill_level)
+        
+        import time
+        start_time = time.time()
+        output = ""
+        error = None
+        exit_code = 0
+        
+        # Determine command to run
+        command = request.command
+        if not command:
+            if request.file_path:
+                # Run specific file
+                file_path = workspace_path / request.file_path
+                ext = file_path.suffix.lower()
+                
+                if ext == '.py':
+                    command = f"python {request.file_path}"
+                elif ext in ['.js', '.mjs']:
+                    command = f"node {request.file_path}"
+                elif ext == '.ts':
+                    command = f"npx ts-node {request.file_path}"
+                elif ext == '.go':
+                    command = f"go run {request.file_path}"
+                elif ext == '.rb':
+                    command = f"ruby {request.file_path}"
+                elif ext == '.php':
+                    command = f"php {request.file_path}"
+                else:
+                    raise HTTPException(status_code=400, detail=f"Cannot run {ext} files directly")
+            else:
+                # Auto-detect run command
+                if (workspace_path / 'package.json').exists():
+                    command = "npm start"
+                elif (workspace_path / 'main.py').exists():
+                    command = "python main.py"
+                elif (workspace_path / 'app.py').exists():
+                    command = "python app.py"
+                elif (workspace_path / 'server.py').exists():
+                    command = "python server.py"
+                elif (workspace_path / 'main.go').exists():
+                    command = "go run main.go"
+                else:
+                    raise HTTPException(status_code=400, detail="No runnable entry point found")
+        
+        # Execute command
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                cwd=str(workspace_path),
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env={**os.environ, 'NODE_ENV': 'development'}
+            )
+            output = result.stdout
+            if result.returncode != 0:
+                error = result.stderr
+                exit_code = result.returncode
+        except subprocess.TimeoutExpired:
+            error = "Execution timed out (30 second limit)"
+            exit_code = 124
+        except Exception as e:
+            error = str(e)
+            exit_code = 1
+        
+        execution_time = time.time() - start_time
+        
+        # Get AI explanation if there's an error
+        error_explanation = None
+        fix_suggestion = None
+        
+        if error:
+            system_prompt = f"""You are a coding mentor explaining runtime errors.
+{skill_context}
+Respond ONLY with valid JSON:
+{{
+    "error_explanation": "Clear explanation of what went wrong",
+    "fix_suggestion": "How to fix it"
+}}"""
+            
+            chat = get_chat_instance(system_prompt)
+            user_msg = UserMessage(text=f"""Explain this error to a {request.skill_level} developer:
+Command: {command}
+Error: {error}""")
+            
+            response = await chat.send_message(user_msg)
+            data = safe_parse_json(response, {})
+            error_explanation = data.get("error_explanation")
+            fix_suggestion = data.get("fix_suggestion")
+        
+        return RunProjectResponse(
+            output=output,
+            error=error,
+            exit_code=exit_code,
+            execution_time=execution_time,
+            error_explanation=error_explanation,
+            fix_suggestion=fix_suggestion
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Run project error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/project/{project_id}/terminal")
+async def execute_terminal_command(project_id: str, request: TerminalCommand):
+    """Execute a terminal command in the project workspace"""
+    try:
+        project = await projects_collection.find_one({"project_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        workspace_path = Path(project['workspace_path'])
+        
+        # Blocked commands for security
+        blocked = ['rm -rf /', 'sudo', 'chmod 777', 'mkfs', 'dd if=']
+        cmd_lower = request.command.lower()
+        if any(b in cmd_lower for b in blocked):
+            return {"output": "", "error": "Command not allowed for security reasons", "exit_code": 1}
+        
+        try:
+            result = subprocess.run(
+                request.command,
+                shell=True,
+                cwd=str(workspace_path),
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            return {
+                "output": result.stdout,
+                "error": result.stderr if result.returncode != 0 else None,
+                "exit_code": result.returncode
+            }
+        except subprocess.TimeoutExpired:
+            return {"output": "", "error": "Command timed out", "exit_code": 124}
+        except Exception as e:
+            return {"output": "", "error": str(e), "exit_code": 1}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Terminal command error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/project/{project_id}/install-deps")
+async def install_dependencies(project_id: str):
+    """Install project dependencies"""
+    try:
+        project = await projects_collection.find_one({"project_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        workspace_path = Path(project['workspace_path'])
+        
+        output = ""
+        error = None
+        
+        # Detect package manager and install
+        if (workspace_path / 'package.json').exists():
+            if (workspace_path / 'yarn.lock').exists():
+                cmd = "yarn install"
+            elif (workspace_path / 'pnpm-lock.yaml').exists():
+                cmd = "pnpm install"
+            else:
+                cmd = "npm install"
+            
+            result = subprocess.run(
+                cmd, shell=True, cwd=str(workspace_path),
+                capture_output=True, text=True, timeout=300
+            )
+            output = result.stdout
+            if result.returncode != 0:
+                error = result.stderr
+        
+        elif (workspace_path / 'requirements.txt').exists():
+            result = subprocess.run(
+                "pip install -r requirements.txt",
+                shell=True, cwd=str(workspace_path),
+                capture_output=True, text=True, timeout=300
+            )
+            output = result.stdout
+            if result.returncode != 0:
+                error = result.stderr
+        
+        elif (workspace_path / 'go.mod').exists():
+            result = subprocess.run(
+                "go mod download",
+                shell=True, cwd=str(workspace_path),
+                capture_output=True, text=True, timeout=300
+            )
+            output = result.stdout
+            if result.returncode != 0:
+                error = result.stderr
+        
+        else:
+            return {"output": "", "error": "No package manager detected", "success": False}
+        
+        return {"output": output, "error": error, "success": error is None}
+        
+    except subprocess.TimeoutExpired:
+        return {"output": "", "error": "Installation timed out", "success": False}
+    except Exception as e:
+        logger.error(f"Install deps error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/project/{project_id}/run-tests")
+async def run_tests(project_id: str, skill_level: str = "intermediate"):
+    """Run project tests"""
+    try:
+        project = await projects_collection.find_one({"project_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        workspace_path = Path(project['workspace_path'])
+        
+        # Detect test command
+        cmd = None
+        if (workspace_path / 'package.json').exists():
+            try:
+                pkg = json.loads((workspace_path / 'package.json').read_text())
+                if 'test' in pkg.get('scripts', {}):
+                    cmd = "npm test"
+            except:
+                pass
+        
+        if not cmd and (workspace_path / 'pytest.ini').exists() or (workspace_path / 'tests').exists():
+            cmd = "pytest -v"
+        
+        if not cmd:
+            return {"output": "", "error": "No test configuration found", "success": False, "test_results": None}
+        
+        try:
+            result = subprocess.run(
+                cmd, shell=True, cwd=str(workspace_path),
+                capture_output=True, text=True, timeout=120
+            )
+            
+            # Parse test results and explain failures
+            explanation = None
+            if result.returncode != 0:
+                skill_context = get_skill_context(skill_level)
+                system_prompt = f"""You are a coding mentor explaining test failures.
+{skill_context}
+Respond ONLY with valid JSON:
+{{
+    "summary": "Brief summary of test results",
+    "failures": [{{"test": "test name", "reason": "why it failed", "fix": "how to fix"}}],
+    "overall_assessment": "What the developer should focus on"
+}}"""
+                
+                chat = get_chat_instance(system_prompt)
+                user_msg = UserMessage(text=f"Explain these test results:\n{result.stdout}\n{result.stderr}")
+                response = await chat.send_message(user_msg)
+                explanation = safe_parse_json(response, {})
+            
+            return {
+                "output": result.stdout,
+                "error": result.stderr if result.returncode != 0 else None,
+                "success": result.returncode == 0,
+                "test_results": explanation
+            }
+            
+        except subprocess.TimeoutExpired:
+            return {"output": "", "error": "Tests timed out", "success": False, "test_results": None}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Run tests error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/project/{project_id}/analyze-full")
+async def analyze_full_project(project_id: str, request: ProjectAnalysisRequest):
+    """Full AI analysis of uploaded project"""
+    try:
+        project = await projects_collection.find_one({"project_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        workspace_path = Path(project['workspace_path'])
+        skill_context = get_skill_context(request.skill_level)
+        
+        # Gather project info
+        files_summary = []
+        key_files_content = ""
+        
+        for root, dirs, files in os.walk(workspace_path):
+            dirs[:] = [d for d in dirs if d not in ['node_modules', '__pycache__', '.git', 'venv', 'dist', 'build']]
+            rel_root = os.path.relpath(root, workspace_path)
+            
+            for f in files[:50]:  # Limit files
+                rel_path = os.path.join(rel_root, f) if rel_root != '.' else f
+                files_summary.append(rel_path)
+        
+        # Get content of key files
+        key_file_patterns = ['main', 'app', 'index', 'server', 'config', 'routes', 'models', 'package.json', 'requirements.txt']
+        for pattern in key_file_patterns:
+            for f in files_summary[:30]:
+                if pattern in f.lower():
+                    try:
+                        file_path = workspace_path / f
+                        if file_path.exists() and file_path.stat().st_size < 10000:
+                            key_files_content += f"\n--- {f} ---\n{file_path.read_text()[:3000]}\n"
+                    except:
+                        pass
+        
+        system_prompt = f"""You are an expert software architect analyzing a codebase.
+{skill_context}
+
+Analyze this project and provide comprehensive insights.
+
+RESPOND ONLY WITH VALID JSON:
+{{
+    "project_name": "Detected project name",
+    "purpose": "What this project does (2-3 sentences)",
+    "architecture_overview": "High-level architecture description",
+    "entry_points": [{{"file": "filename", "purpose": "what it does"}}],
+    "main_modules": [{{"name": "Module name", "purpose": "What it does", "files": ["file1", "file2"]}}],
+    "dependencies": ["key dependency 1", "key dependency 2"],
+    "frameworks": ["Framework 1", "Framework 2"],
+    "learning_roadmap": {{
+        "beginner": ["Step 1: Start with...", "Step 2: Then learn..."],
+        "intermediate": ["Step 1: ...", "Step 2: ..."],
+        "advanced": ["Step 1: ...", "Step 2: ..."]
+    }},
+    "file_recommendations": [{{"file": "filename", "reason": "why to read this first"}}],
+    "potential_issues": ["Issue 1", "Issue 2"],
+    "improvement_suggestions": ["Suggestion 1", "Suggestion 2"]
+}}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"""Analyze this project:
+
+Project Name: {project['name']}
+Languages: {json.dumps(project.get('languages', []))}
+Frameworks Detected: {project.get('frameworks', [])}
+Build System: {project.get('build_system', 'Unknown')}
+Has Tests: {project.get('has_tests', False)}
+
+Files ({len(files_summary)} total):
+{chr(10).join(files_summary[:50])}
+
+Key File Contents:
+{key_files_content[:15000]}""")
+        
+        response = await chat.send_message(user_msg)
+        data = safe_parse_json(response, {
+            "project_name": project['name'],
+            "purpose": "Analysis pending",
+            "architecture_overview": "Unable to analyze",
+            "entry_points": [],
+            "main_modules": [],
+            "dependencies": [],
+            "frameworks": project.get('frameworks', []),
+            "learning_roadmap": {},
+            "file_recommendations": [],
+            "potential_issues": [],
+            "improvement_suggestions": []
+        })
+        
+        return FullProjectAnalysis(**data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Full project analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== CODE ANALYSIS ENDPOINTS ==============
+
 @api_router.post("/analyze-code", response_model=CodeAnalysisResponse)
 async def analyze_code(request: CodeAnalysisRequest):
-    """Analyze code for bugs and issues with skill-level awareness"""
+    """Analyze code for bugs and issues"""
     try:
         skill_context = get_skill_context(request.skill_level)
         
-        system_prompt = f"""You are an expert code analyzer and bug detector. Your job is to find ALL bugs, potential issues, and improvements in code.
-
+        system_prompt = f"""You are an expert code analyzer and bug detector.
 {skill_context}
 
-RESPOND ONLY WITH VALID JSON - NO MARKDOWN, NO EXPLANATION:
+RESPOND ONLY WITH VALID JSON:
 {{
     "bugs": [
-        {{"line": 5, "severity": "critical", "message": "Description of the bug", "suggestion": "How to fix it"}}
+        {{"line": 5, "severity": "critical", "message": "Description", "suggestion": "How to fix"}}
     ],
     "overall_quality": "good|fair|poor"
 }}
 
-SEVERITY LEVELS:
-- "critical": Runtime errors, crashes, exceptions (ZeroDivisionError, IndexError, NullPointerException, etc.)
-- "warning": Logic bugs, edge cases not handled, security issues
-- "info": Style improvements, performance optimizations, best practices
-
-RULES:
-1. ALWAYS check for: division by zero, empty list/array handling, null/undefined access, off-by-one errors
-2. Line numbers must be accurate
-3. If code has bugs, overall_quality should be "fair" or "poor"
-4. Be thorough - find ALL issues, not just obvious ones
-5. Adapt message complexity to the skill level"""
+SEVERITY: critical (runtime errors), warning (logic bugs), info (style/performance)"""
         
         chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"Find ALL bugs and issues in this {request.language} code. Be thorough:\n\n```{request.language}\n{request.code}\n```")
+        user_msg = UserMessage(text=f"Find ALL bugs in this {request.language} code:\n```{request.language}\n{request.code}\n```")
         response = await chat.send_message(user_msg)
         
         data = safe_parse_json(response, {"bugs": [], "overall_quality": "fair"})
@@ -391,365 +1123,21 @@ RULES:
             bugs=[Bug(**b) for b in data.get("bugs", [])],
             overall_quality=data.get("overall_quality", "fair")
         )
-            
     except Exception as e:
         logger.error(f"Code analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.post("/generate-teaching", response_model=TeachingResponse)
-async def generate_teaching(request: TeachingRequest):
-    """Generate pedagogical explanation for a bug with skill-level adaptation"""
-    try:
-        skill_context = get_skill_context(request.skill_level)
-        mentor_persona = get_mentor_persona(request.skill_level)
-        
-        style_instructions = {
-            "patient": "Be patient, warm, and encouraging. Use simple analogies.",
-            "socratic": "Ask guiding questions to help the student discover the answer.",
-            "direct": "Be clear and concise. Get straight to the point."
-        }
-        
-        system_prompt = f"""You are a coding mentor with this persona: {mentor_persona}
-{style_instructions.get(request.mentorStyle, style_instructions['patient'])}
-
-{skill_context}
-
-Respond ONLY with valid JSON:
-{{
-    "conceptName": "Name of the concept/pattern being taught",
-    "naturalExplanation": "Clear explanation adapted to skill level",
-    "whyItMatters": "Why this matters in real programming",
-    "commonMistake": "Why this is a common mistake and how to avoid it"
-}}
-
-IMPORTANT: Adapt your language complexity and depth to the {request.skill_level} level."""
-        
-        chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"Explain this bug to a {request.skill_level} developer:\n\nCode:\n```\n{request.code}\n```\n\nBug at line {request.bug.get('line', '?')}: {request.bug.get('message', 'Unknown issue')}")
-        response = await chat.send_message(user_msg)
-        
-        data = safe_parse_json(response, {
-            "conceptName": "Code Issue",
-            "naturalExplanation": response or "Let me explain this issue...",
-            "whyItMatters": "Understanding this helps write better code.",
-            "commonMistake": "This is a common pattern that trips up many developers."
-        })
-        
-        return TeachingResponse(
-            conceptName=data.get("conceptName", "Code Issue"),
-            naturalExplanation=data.get("naturalExplanation", "Let me explain..."),
-            whyItMatters=data.get("whyItMatters", "This is important for writing robust code."),
-            commonMistake=data.get("commonMistake", "Many developers encounter this.")
-        )
-            
-    except Exception as e:
-        logger.error(f"Teaching generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/generate-deeper-explanation", response_model=DeeperExplanationResponse)
-async def generate_deeper_explanation(request: DeeperExplanationRequest):
-    """Generate a more detailed explanation with skill-level awareness"""
-    try:
-        skill_context = get_skill_context(request.skill_level)
-        
-        system_prompt = f"""You are an expert programming tutor providing deep explanations.
-
-{skill_context}
-
-Respond ONLY with valid JSON:
-{{
-    "deeperExplanation": "Detailed technical explanation with more context, adapted to skill level",
-    "codeExamples": ["Example code snippet 1", "Example code snippet 2"],
-    "relatedConcepts": ["Related concept 1", "Related concept 2"]
-}}"""
-        
-        chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"Provide a deeper explanation for: {request.conceptName}\n\nCurrent explanation: {request.currentExplanation}\n\nAdapt to {request.skill_level} level.")
-        response = await chat.send_message(user_msg)
-        
-        data = safe_parse_json(response, {
-            "deeperExplanation": response or "Here's a deeper look...",
-            "codeExamples": [],
-            "relatedConcepts": []
-        })
-        
-        return DeeperExplanationResponse(
-            deeperExplanation=data.get("deeperExplanation", "Here's more detail..."),
-            codeExamples=data.get("codeExamples", []),
-            relatedConcepts=data.get("relatedConcepts", [])
-        )
-            
-    except Exception as e:
-        logger.error(f"Deeper explanation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/generate-visual-diagram", response_model=VisualDiagramResponse)
-async def generate_visual_diagram(request: VisualDiagramRequest):
-    """Generate SVG diagram for a concept with multiple diagram types"""
-    try:
-        skill_context = get_skill_context(request.skill_level)
-        
-        diagram_instructions = {
-            "flowchart": "Create a flowchart showing step-by-step logic flow with decision diamonds and process rectangles",
-            "state_flow": "Show state changes with arrows between boxes, highlighting data transformations",
-            "async_timeline": "Show async operations on a horizontal timeline with call stack visualization",
-            "closure_scope": "Show nested scopes with variable capture using nested boxes",
-            "event_loop": "Show call stack, web APIs, and callback queue interactions",
-            "data_flow": "Show how data moves through the system with arrows and transformations",
-            "architecture": "Show system components and their relationships",
-            "memory_model": "Show stack and heap memory allocation",
-            "sequence": "Show sequence of function calls and returns over time"
-        }
-        
-        system_prompt = f"""You are an expert at creating educational SVG diagrams.
-
-{skill_context}
-
-Create a clean, professional SVG diagram (800x500px) with:
-- Dark background (#1E1E1E)
-- Google colors: Blue (#4285F4), Red (#EA4335), Yellow (#FBBC04), Green (#34A853)
-- White text (#FFFFFF) with clear labels
-- Arrows and connecting lines
-- Rounded rectangles for boxes
-- Font: sans-serif, readable sizes
-
-Diagram Type: {request.diagramType}
-Instructions: {diagram_instructions.get(request.diagramType, "Create an informative diagram")}
-
-Make the diagram appropriate for a {request.skill_level} level developer:
-- Beginner: Simple, few elements, clear labels
-- Intermediate: More detail, logical groupings
-- Advanced: Complete picture, technical annotations
-- Senior: Production-grade, edge cases noted
-
-Respond with ONLY the SVG code, no explanation. Start with <svg and end with </svg>"""
-        
-        chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"Create a {request.diagramType} diagram for: {request.conceptName}\n\nContext: {request.explanation}\n\nCode:\n```\n{request.code}\n```")
-        response = await chat.send_message(user_msg)
-        
-        svg_content = response.strip() if response else ""
-        if "<svg" in svg_content:
-            start = svg_content.find("<svg")
-            end = svg_content.rfind("</svg>") + 6
-            svg_content = svg_content[start:end]
-        else:
-            svg_content = f'''<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
-                <rect width="800" height="500" fill="#1E1E1E"/>
-                <text x="400" y="250" fill="#FFFFFF" text-anchor="middle" font-size="20">{request.conceptName}</text>
-            </svg>'''
-        
-        return VisualDiagramResponse(svg=svg_content)
-        
-    except Exception as e:
-        logger.error(f"Diagram generation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/evaluate-answer", response_model=EvaluateAnswerResponse)
-async def evaluate_answer(request: EvaluateAnswerRequest):
-    """Evaluate student understanding with follow-up questions"""
-    try:
-        skill_context = get_skill_context(request.skill_level)
-        
-        system_prompt = f"""You are a supportive coding mentor evaluating student understanding.
-
-{skill_context}
-
-Respond ONLY with valid JSON:
-{{
-    "understood": true or false,
-    "feedback": "Specific feedback about their answer",
-    "encouragement": "Encouraging message",
-    "follow_up_question": "A follow-up question to deepen understanding (optional, null if not needed)"
-}}
-
-Be generous for beginners - if they show basic understanding, mark as understood.
-Be more rigorous for advanced/senior levels - expect deeper understanding."""
-        
-        chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"Question: {request.question}\n\nCorrect concept: {request.correctConcept}\n\nStudent's answer ({request.skill_level} level): {request.studentAnswer}\n\nDid they understand?")
-        response = await chat.send_message(user_msg)
-        
-        data = safe_parse_json(response, {
-            "understood": True,
-            "feedback": "Good effort!",
-            "encouragement": "Keep learning!",
-            "follow_up_question": None
-        })
-        
-        return EvaluateAnswerResponse(
-            understood=data.get("understood", True),
-            feedback=data.get("feedback", "Good effort!"),
-            encouragement=data.get("encouragement", "Keep learning!"),
-            follow_up_question=data.get("follow_up_question")
-        )
-            
-    except Exception as e:
-        logger.error(f"Answer evaluation error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/english-chat", response_model=EnglishChatResponse)
-async def english_chat(request: EnglishChatRequest):
-    """English learning chat assistant"""
-    try:
-        system_prompt = """You are a friendly English language tutor. Help users improve their English.
-        
-        Detect the user's intent:
-        - "question": They're asking how to say something in English
-        - "practice": They wrote a sentence for correction
-        - "conversation": General chat practice
-        
-        Respond ONLY with valid JSON:
-        {
-            "response": "Your helpful response",
-            "intent": "question|practice|conversation",
-            "corrections": [
-                {"original": "what they wrote", "corrected": "corrected version", "explanation": "why"}
-            ]
-        }
-        
-        Be encouraging and patient. If there are no errors, the corrections array should be empty."""
-        
-        chat = get_chat_instance(system_prompt)
-        
-        context = ""
-        for msg in request.conversationHistory[-5:]:
-            context += f"{msg.role}: {msg.content}\n"
-        
-        user_msg = UserMessage(text=f"Conversation history:\n{context}\n\nUser's new message: {request.message}")
-        response = await chat.send_message(user_msg)
-        
-        data = safe_parse_json(response, {
-            "response": response or "I'm here to help you learn English!",
-            "intent": "conversation",
-            "corrections": []
-        })
-        
-        return EnglishChatResponse(
-            response=data.get("response", "I'm here to help!"),
-            intent=data.get("intent", "conversation"),
-            corrections=[Correction(**c) for c in data.get("corrections", [])]
-        )
-            
-    except Exception as e:
-        logger.error(f"English chat error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/fix-code", response_model=FixCodeResponse)
-async def fix_code(request: FixCodeRequest):
-    """AI Senior fixes the code automatically with skill-level awareness"""
-    try:
-        skill_context = get_skill_context(request.skill_level)
-        mentor_persona = get_mentor_persona(request.skill_level)
-        
-        bugs_context = ""
-        if request.bugs:
-            bugs_context = "Known bugs to fix:\n" + "\n".join([f"- Line {b.get('line', '?')}: {b.get('message', '')}" for b in request.bugs])
-        
-        inline_comment_instruction = ""
-        if request.apply_inline_comments:
-            inline_comment_instruction = "\n6. Add inline comments explaining each important change for learning purposes"
-        
-        system_prompt = f"""You are a senior software engineer with this persona: {mentor_persona}
-Your job is to fix ALL bugs in the code and return clean, working code.
-
-{skill_context}
-
-RESPOND ONLY WITH VALID JSON:
-{{
-    "fixed_code": "The complete fixed code (properly formatted, ready to run)",
-    "explanation": "Brief explanation of what was fixed, adapted to {request.skill_level} level",
-    "changes_made": ["Change 1", "Change 2", "Change 3"]
-}}
-
-RULES:
-1. Fix ALL bugs - division by zero, null checks, async/await issues, etc.
-2. Keep the code structure similar but correct
-3. Add necessary error handling
-4. The fixed_code must be complete and runnable
-5. Preserve comments but fix the issues they mention{inline_comment_instruction}
-
-Adapt explanation complexity to the {request.skill_level} level."""
-        
-        chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"Fix this {request.language} code:\n\n```{request.language}\n{request.code}\n```\n\n{bugs_context}")
-        response = await chat.send_message(user_msg)
-        
-        data = safe_parse_json(response, {
-            "fixed_code": request.code,
-            "explanation": "Unable to generate fix",
-            "changes_made": []
-        })
-        
-        return FixCodeResponse(
-            fixed_code=data.get("fixed_code", request.code),
-            explanation=data.get("explanation", "Code has been reviewed"),
-            changes_made=data.get("changes_made", [])
-        )
-        
-    except Exception as e:
-        logger.error(f"Fix code error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/analyze-image", response_model=ImageAnalysisResponse)
-async def analyze_image(request: ImageAnalysisRequest):
-    """Analyze uploaded image with skill-level awareness"""
-    try:
-        skill_context = get_skill_context(request.skill_level)
-        
-        task_prompts = {
-            "code_screenshot": "Analyze this code screenshot. Identify the programming language, describe what the code does, and point out any visible bugs or issues.",
-            "whiteboard": "Transcribe any handwritten code or diagrams in this whiteboard image. If it's code, identify the language and explain what it's trying to do.",
-            "english_text": "Read the text in this image. Check for any grammar or spelling errors and provide corrections.",
-            "general": "Analyze this educational image and provide helpful insights for learning."
-        }
-        
-        system_prompt = f"""You are an expert at analyzing educational images.
-
-{skill_context}
-
-Task: {task_prompts.get(request.task_type, task_prompts['general'])}
-
-{f'Additional context: {request.additional_context}' if request.additional_context else ''}
-
-Provide a clear, helpful analysis adapted to a {request.skill_level} level learner."""
-        
-        chat = get_chat_instance(system_prompt)
-        
-        image_content = ImageContent(image_base64=request.image_data)
-        user_msg = UserMessage(
-            text="Please analyze this image:",
-            file_contents=[image_content]
-        )
-        response = await chat.send_message(user_msg)
-        
-        return ImageAnalysisResponse(
-            analysis=response or "Unable to analyze the image. Please try again.",
-            task_type=request.task_type
-        )
-        
-    except Exception as e:
-        logger.error(f"Image analysis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============== NEW ENDPOINTS FOR ENHANCED FEATURES ==============
-
 @api_router.post("/line-mentoring", response_model=LineMentoringResponse)
 async def line_mentoring(request: LineMentoringRequest):
-    """Smart line-level mentoring - analyze specific lines with full context"""
+    """Smart line-level mentoring"""
     try:
         skill_context = get_skill_context(request.skill_level)
-        mentor_persona = get_mentor_persona(request.skill_level)
         
-        # Extract selected lines from code
         code_lines = request.code.split('\n')
         selected_code = '\n'.join([code_lines[i-1] if i <= len(code_lines) else '' for i in request.selected_lines])
         
-        system_prompt = f"""You are a coding mentor with this persona: {mentor_persona}
-
+        system_prompt = f"""You are a coding mentor helping with specific lines of code.
 {skill_context}
-
-You are helping with specific lines of code. Analyze the selected lines in context of the full code.
 
 RESPOND ONLY WITH VALID JSON:
 {{
@@ -757,23 +1145,16 @@ RESPOND ONLY WITH VALID JSON:
     "what_it_does": "Technical description of functionality",
     "potential_issues": ["Issue 1", "Issue 2"],
     "improvement_suggestions": ["Suggestion 1", "Suggestion 2"],
-    "corrected_code": "Improved version of just the selected lines (or null if no improvements needed)",
+    "corrected_code": "Improved version (or null if no improvements needed)",
     "teaching_points": ["Key learning point 1", "Key learning point 2"]
-}}
-
-IMPORTANT:
-- Consider the FULL context of the code, not just the selected lines
-- Adapt explanation depth to {request.skill_level} level
-- If the user asked a specific question, answer it directly
-- Be a mentor, not just a critic - teach, don't just fix"""
+}}"""
         
         chat = get_chat_instance(system_prompt)
-        
-        question_context = f"\n\nUser's question: {request.question}" if request.question else ""
+        question_context = f"\nUser's question: {request.question}" if request.question else ""
         
         user_msg = UserMessage(text=f"""Help me understand these lines of {request.language} code:
 
-FULL CODE CONTEXT:
+FULL CODE:
 ```{request.language}
 {request.code}
 ```
@@ -785,413 +1166,62 @@ SELECTED LINES ({', '.join(map(str, request.selected_lines))}):
 {question_context}""")
         
         response = await chat.send_message(user_msg)
-        
         data = safe_parse_json(response, {
-            "explanation": "Let me explain these lines...",
-            "what_it_does": "This code performs...",
+            "explanation": "Let me explain...",
+            "what_it_does": "This code...",
             "potential_issues": [],
             "improvement_suggestions": [],
             "corrected_code": None,
             "teaching_points": []
         })
         
-        return LineMentoringResponse(
-            explanation=data.get("explanation", ""),
-            what_it_does=data.get("what_it_does", ""),
-            potential_issues=data.get("potential_issues", []),
-            improvement_suggestions=data.get("improvement_suggestions", []),
-            corrected_code=data.get("corrected_code"),
-            teaching_points=data.get("teaching_points", [])
-        )
-        
+        return LineMentoringResponse(**data)
     except Exception as e:
         logger.error(f"Line mentoring error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.post("/session-memory/store", response_model=SessionMemoryResponse)
-async def store_session_memory(request: SessionMemoryRequest):
-    """Store a fix/issue in session memory for repetition detection"""
+@api_router.post("/fix-code", response_model=FixCodeResponse)
+async def fix_code(request: FixCodeRequest):
+    """AI Senior fixes code"""
     try:
-        memory_entry = {
-            "session_id": request.session_id,
-            "issue_type": request.issue_type,
-            "issue_description": request.issue_description,
-            "fix_applied": request.fix_applied,
-            "skill_level": request.skill_level,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        
-        await sessions_collection.insert_one(memory_entry)
-        
-        return SessionMemoryResponse(
-            stored=True,
-            message="Issue and fix stored in session memory"
-        )
-        
-    except Exception as e:
-        logger.error(f"Session memory store error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/session-memory/check-repetition", response_model=CheckRepetitionResponse)
-async def check_repetition(request: CheckRepetitionRequest):
-    """Check if an issue has been encountered before in this session"""
-    try:
-        # Find similar issues in session
-        similar_issues = await sessions_collection.find({
-            "session_id": request.session_id
-        }).to_list(100)
-        
-        if not similar_issues:
-            return CheckRepetitionResponse(
-                is_repeated=False,
-                previous_fix=None,
-                escalation_message=None,
-                higher_level_tip=None
-            )
-        
-        # Use AI to check if current issue matches any previous ones
-        system_prompt = """You are checking if a coding issue has been seen before in a session.
-
-Respond ONLY with valid JSON:
-{
-    "is_repeated": true or false,
-    "matched_issue_index": 0 (index of matched issue, or -1 if not repeated),
-    "escalation_message": "Message about having seen this before (null if not repeated)",
-    "higher_level_tip": "A more advanced tip since they've seen this before (null if not repeated)"
-}"""
-        
-        chat = get_chat_instance(system_prompt)
-        
-        previous_issues = "\n".join([f"{i}. {issue['issue_type']}: {issue['issue_description']}" for i, issue in enumerate(similar_issues)])
-        
-        user_msg = UserMessage(text=f"""Current issue:
-{request.current_issue}
-
-Code context:
-{request.code_context}
-
-Previous issues in this session:
-{previous_issues}
-
-Is this a repeated issue?""")
-        
-        response = await chat.send_message(user_msg)
-        data = safe_parse_json(response, {"is_repeated": False})
-        
-        previous_fix = None
-        if data.get("is_repeated") and data.get("matched_issue_index", -1) >= 0:
-            idx = data["matched_issue_index"]
-            if idx < len(similar_issues):
-                previous_fix = similar_issues[idx].get("fix_applied")
-        
-        return CheckRepetitionResponse(
-            is_repeated=data.get("is_repeated", False),
-            previous_fix=previous_fix,
-            escalation_message=data.get("escalation_message"),
-            higher_level_tip=data.get("higher_level_tip")
-        )
-        
-    except Exception as e:
-        logger.error(f"Check repetition error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/upload-project")
-async def upload_project(file: UploadFile = File(...)):
-    """Upload and analyze a project ZIP file"""
-    try:
-        project_id = str(uuid.uuid4())
-        files_data = []
-        
-        # Read ZIP file
-        content = await file.read()
-        
-        with zipfile.ZipFile(io.BytesIO(content), 'r') as zip_ref:
-            for zip_info in zip_ref.infolist():
-                if zip_info.is_dir():
-                    continue
-                    
-                # Skip binary and large files
-                if zip_info.file_size > 100000:  # 100KB limit per file
-                    continue
-                    
-                filename = zip_info.filename
-                ext = Path(filename).suffix.lower()
-                
-                # Skip non-code files
-                skip_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', 
-                                  '.woff', '.woff2', '.ttf', '.eot', '.mp3', '.mp4',
-                                  '.zip', '.tar', '.gz', '.exe', '.dll', '.so'}
-                if ext in skip_extensions:
-                    continue
-                
-                try:
-                    file_content = zip_ref.read(zip_info.filename).decode('utf-8')
-                    files_data.append({
-                        "path": filename,
-                        "content": file_content[:10000],  # Limit content size
-                        "language": detect_language_from_extension(filename)
-                    })
-                except:
-                    continue
-        
-        # Store project in database
-        await projects_collection.insert_one({
-            "project_id": project_id,
-            "name": file.filename,
-            "files": files_data,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        })
-        
-        return {"project_id": project_id, "files_count": len(files_data), "files": [f["path"] for f in files_data]}
-        
-    except Exception as e:
-        logger.error(f"Project upload error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/analyze-project", response_model=ProjectAnalysisResponse)
-async def analyze_project(project_id: str = Form(...), skill_level: str = Form("intermediate")):
-    """Analyze uploaded project and create learning roadmap"""
-    try:
-        project = await projects_collection.find_one({"project_id": project_id})
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-        
-        skill_context = get_skill_context(skill_level)
-        
-        # Prepare file summary for AI
-        files_summary = "\n".join([f"- {f['path']} ({f['language']}): {len(f['content'])} chars" for f in project['files'][:50]])
-        
-        # Get sample of key files
-        key_files_content = ""
-        for f in project['files'][:10]:
-            key_files_content += f"\n--- {f['path']} ---\n{f['content'][:2000]}\n"
-        
-        system_prompt = f"""You are an expert software architect analyzing a codebase.
-
-{skill_context}
-
-Analyze this project and create a learning roadmap.
-
-RESPOND ONLY WITH VALID JSON:
-{{
-    "project_name": "Detected project name",
-    "purpose": "What this project does",
-    "entry_points": ["main.py", "index.js", etc],
-    "main_modules": [
-        {{"name": "Module name", "purpose": "What it does", "files": ["file1.py", "file2.py"]}}
-    ],
-    "dependencies": ["dependency1", "dependency2"],
-    "architecture_overview": "High-level architecture description",
-    "learning_roadmap": {{
-        "beginner": ["Step 1", "Step 2"],
-        "intermediate": ["Step 1", "Step 2"],
-        "advanced": ["Step 1", "Step 2"]
-    }}
-}}"""
-        
-        chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"""Analyze this project:
-
-Files in project:
-{files_summary}
-
-Sample file contents:
-{key_files_content}
-
-Create a learning roadmap for a {skill_level} developer.""")
-        
-        response = await chat.send_message(user_msg)
-        data = safe_parse_json(response, {
-            "project_name": project['name'],
-            "purpose": "Unknown",
-            "entry_points": [],
-            "main_modules": [],
-            "dependencies": [],
-            "architecture_overview": "Analysis pending",
-            "learning_roadmap": {"beginner": [], "intermediate": [], "advanced": []}
-        })
-        
-        return ProjectAnalysisResponse(**data)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Project analysis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/generate-learning-journey", response_model=LearningJourneyResponse)
-async def generate_learning_journey(request: LearningJourneyRequest):
-    """Generate a step-by-step learning journey for a project"""
-    try:
-        project = await projects_collection.find_one({"project_id": request.project_id})
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-        
         skill_context = get_skill_context(request.skill_level)
         
-        files_summary = "\n".join([f"- {f['path']}" for f in project['files'][:30]])
+        bugs_context = ""
+        if request.bugs:
+            bugs_context = "Known bugs:\n" + "\n".join([f"- Line {b.get('line', '?')}: {b.get('message', '')}" for b in request.bugs])
         
-        focus_instruction = f"Focus area: {request.focus_area}" if request.focus_area else ""
+        comment_instruction = "\n6. Add inline comments explaining each change" if request.apply_inline_comments else ""
         
-        system_prompt = f"""You are an expert coding tutor creating personalized learning journeys.
-
+        system_prompt = f"""You are a senior software engineer fixing code.
 {skill_context}
-
-Create a step-by-step learning journey through this codebase.
 
 RESPOND ONLY WITH VALID JSON:
 {{
-    "journey_steps": [
-        {{
-            "step_number": 1,
-            "file": "filename.py",
-            "title": "Step title",
-            "description": "What to learn in this step",
-            "concepts": ["concept1", "concept2"],
-            "estimated_time": "10 minutes"
-        }}
-    ],
-    "estimated_time": "2 hours total",
-    "key_concepts": ["Main concept 1", "Main concept 2"]
+    "fixed_code": "Complete fixed code",
+    "explanation": "What was fixed",
+    "changes_made": ["Change 1", "Change 2"]
 }}
 
 RULES:
-1. Order files logically - start with entry points, then core modules
-2. Each step should build on previous steps
-3. Adapt complexity to {request.skill_level} level
-4. Include practical exercises where appropriate"""
+1. Fix ALL bugs
+2. Keep structure similar
+3. Add error handling
+4. Code must be runnable
+5. Preserve comments{comment_instruction}"""
         
         chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"""Create a learning journey for this project:
-
-Project: {project['name']}
-Files:
-{files_summary}
-
-Skill level: {request.skill_level}
-{focus_instruction}""")
-        
+        user_msg = UserMessage(text=f"Fix this {request.language} code:\n```{request.language}\n{request.code}\n```\n{bugs_context}")
         response = await chat.send_message(user_msg)
+        
         data = safe_parse_json(response, {
-            "journey_steps": [],
-            "estimated_time": "Unknown",
-            "key_concepts": []
+            "fixed_code": request.code,
+            "explanation": "Unable to fix",
+            "changes_made": []
         })
         
-        return LearningJourneyResponse(**data)
-        
-    except HTTPException:
-        raise
+        return FixCodeResponse(**data)
     except Exception as e:
-        logger.error(f"Learning journey error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/execute-code", response_model=CodeExecutionResponse)
-async def execute_code(request: CodeExecutionRequest):
-    """Execute code and provide error explanations"""
-    try:
-        import subprocess
-        import time
-        
-        skill_context = get_skill_context(request.skill_level)
-        
-        output = ""
-        error = None
-        execution_time = 0.0
-        error_explanation = None
-        fix_suggestion = None
-        
-        if request.language == "python":
-            # Create temp file and execute
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-                f.write(request.code)
-                temp_file = f.name
-            
-            try:
-                start_time = time.time()
-                result = subprocess.run(
-                    ['python', temp_file],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                execution_time = time.time() - start_time
-                
-                output = result.stdout
-                if result.returncode != 0:
-                    error = result.stderr
-            except subprocess.TimeoutExpired:
-                error = "Execution timed out (10 second limit)"
-            except Exception as e:
-                error = str(e)
-            finally:
-                os.unlink(temp_file)
-        
-        elif request.language == "javascript":
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as f:
-                f.write(request.code)
-                temp_file = f.name
-            
-            try:
-                start_time = time.time()
-                result = subprocess.run(
-                    ['node', temp_file],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                execution_time = time.time() - start_time
-                
-                output = result.stdout
-                if result.returncode != 0:
-                    error = result.stderr
-            except subprocess.TimeoutExpired:
-                error = "Execution timed out (10 second limit)"
-            except Exception as e:
-                error = str(e)
-            finally:
-                os.unlink(temp_file)
-        else:
-            error = f"Execution not supported for {request.language}. Supported: Python, JavaScript"
-        
-        # If there's an error, get AI explanation
-        if error:
-            system_prompt = f"""You are a coding mentor explaining runtime errors.
-
-{skill_context}
-
-Respond ONLY with valid JSON:
-{{
-    "error_explanation": "Clear explanation of what went wrong",
-    "fix_suggestion": "How to fix it"
-}}"""
-            
-            chat = get_chat_instance(system_prompt)
-            user_msg = UserMessage(text=f"""Explain this error to a {request.skill_level} developer:
-
-Code:
-```{request.language}
-{request.code}
-```
-
-Error:
-{error}""")
-            
-            response = await chat.send_message(user_msg)
-            data = safe_parse_json(response, {})
-            error_explanation = data.get("error_explanation")
-            fix_suggestion = data.get("fix_suggestion")
-        
-        return CodeExecutionResponse(
-            output=output,
-            error=error,
-            execution_time=execution_time,
-            error_explanation=error_explanation,
-            fix_suggestion=fix_suggestion
-        )
-        
-    except Exception as e:
-        logger.error(f"Code execution error: {e}")
+        logger.error(f"Fix code error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.post("/proactive-mentor", response_model=ProactiveMentorResponse)
@@ -1201,127 +1231,178 @@ async def proactive_mentor(request: ProactiveMentorRequest):
         skill_context = get_skill_context(request.skill_level)
         
         system_prompt = f"""You are a proactive coding mentor watching live code.
-
 {skill_context}
 
-Detect common mistakes in the code:
-- Async misuse (missing await, callback issues)
-- State mutation problems
-- Off-by-one errors
-- Bad patterns (god functions, tight coupling)
-- Security issues (SQL injection, XSS)
-- Performance anti-patterns
-
-ONLY interrupt for REAL issues, not style preferences.
+Detect common mistakes: async misuse, state mutation, off-by-one errors, security issues.
+ONLY flag REAL bugs, not style preferences.
 
 RESPOND ONLY WITH VALID JSON:
 {{
     "has_issue": true or false,
-    "issue_type": "Type of issue (e.g., 'async_misuse', 'security', 'logic_error')",
-    "message": "Brief, friendly message explaining the issue",
+    "issue_type": "Type of issue",
+    "message": "Brief explanation",
     "severity": "critical|warning|info",
-    "quick_fix": "One-line fix suggestion if applicable"
-}}
-
-Be selective - only flag actual bugs or important patterns for {request.skill_level} level developers."""
+    "quick_fix": "One-line fix suggestion"
+}}"""
         
         chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"""Check this {request.language} code for issues:
-
-```{request.language}
-{request.code}
-```
-
-Developer skill level: {request.skill_level}""")
-        
+        user_msg = UserMessage(text=f"Check this {request.language} code:\n```{request.language}\n{request.code}\n```")
         response = await chat.send_message(user_msg)
         data = safe_parse_json(response, {"has_issue": False})
         
-        return ProactiveMentorResponse(
-            has_issue=data.get("has_issue", False),
-            issue_type=data.get("issue_type"),
-            message=data.get("message"),
-            severity=data.get("severity", "info"),
-            quick_fix=data.get("quick_fix")
-        )
-        
+        return ProactiveMentorResponse(**data)
     except Exception as e:
         logger.error(f"Proactive mentor error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.post("/generate-smart-question", response_model=SmartQuestionResponse)
-async def generate_smart_question(request: SmartQuestionRequest):
-    """Generate intelligent follow-up questions to verify understanding"""
+@api_router.post("/generate-teaching", response_model=TeachingResponse)
+async def generate_teaching(request: TeachingRequest):
+    """Generate pedagogical explanation"""
     try:
         skill_context = get_skill_context(request.skill_level)
         
-        previous_q_context = ""
-        if request.previous_questions:
-            previous_q_context = f"Previously asked questions (don't repeat): {', '.join(request.previous_questions)}"
-        
-        system_prompt = f"""You are a coding mentor creating questions to verify understanding.
-
+        system_prompt = f"""You are a coding mentor.
 {skill_context}
 
-Create a question appropriate for a {request.skill_level} level developer.
-
-RESPOND ONLY WITH VALID JSON:
+Respond ONLY with valid JSON:
 {{
-    "question": "The question to ask",
-    "expected_answer_hints": ["Key point 1 to look for", "Key point 2"],
-    "difficulty": "easy|medium|hard"
-}}
-
-{previous_q_context}
-
-RULES:
-- Beginner: Simple recall and basic application questions
-- Intermediate: Application and analysis questions
-- Advanced: Synthesis and evaluation questions
-- Senior: Architecture and design trade-off questions"""
+    "conceptName": "Name of the concept",
+    "naturalExplanation": "Clear explanation",
+    "whyItMatters": "Why this matters",
+    "commonMistake": "Common mistake and how to avoid"
+}}"""
         
         chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"""Generate a question about: {request.concept_taught}
-
-Skill level: {request.skill_level}""")
-        
+        user_msg = UserMessage(text=f"Explain this bug:\nCode:\n```\n{request.code}\n```\nBug at line {request.bug.get('line', '?')}: {request.bug.get('message', '')}")
         response = await chat.send_message(user_msg)
+        
         data = safe_parse_json(response, {
-            "question": f"Can you explain {request.concept_taught} in your own words?",
-            "expected_answer_hints": ["Understanding of the core concept"],
-            "difficulty": "medium"
+            "conceptName": "Code Issue",
+            "naturalExplanation": response or "Let me explain...",
+            "whyItMatters": "Understanding this helps write better code.",
+            "commonMistake": "Many developers encounter this."
         })
         
-        return SmartQuestionResponse(**data)
-        
+        return TeachingResponse(**data)
     except Exception as e:
-        logger.error(f"Smart question error: {e}")
+        logger.error(f"Teaching error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@api_router.get("/project/{project_id}/files")
-async def get_project_files(project_id: str):
-    """Get files from an uploaded project"""
+@api_router.post("/generate-deeper-explanation", response_model=DeeperExplanationResponse)
+async def generate_deeper_explanation(request: DeeperExplanationRequest):
+    """Generate detailed explanation"""
+    try:
+        skill_context = get_skill_context(request.skill_level)
+        
+        system_prompt = f"""You are an expert programming tutor.
+{skill_context}
+
+Respond ONLY with valid JSON:
+{{
+    "deeperExplanation": "Detailed explanation",
+    "codeExamples": ["Example 1", "Example 2"],
+    "relatedConcepts": ["Concept 1", "Concept 2"]
+}}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Deeper explanation for: {request.conceptName}\nCurrent: {request.currentExplanation}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "deeperExplanation": "Here's more detail...",
+            "codeExamples": [],
+            "relatedConcepts": []
+        })
+        
+        return DeeperExplanationResponse(**data)
+    except Exception as e:
+        logger.error(f"Deeper explanation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/generate-visual-diagram", response_model=VisualDiagramResponse)
+async def generate_visual_diagram(request: VisualDiagramRequest):
+    """Generate SVG diagram"""
+    try:
+        skill_context = get_skill_context(request.skill_level)
+        
+        system_prompt = f"""Create educational SVG diagrams (800x500px).
+{skill_context}
+
+Use dark background (#1E1E1E), Google colors (Blue #4285F4, Red #EA4335, Yellow #FBBC04, Green #34A853), white text.
+
+Respond with ONLY SVG code. Start with <svg and end with </svg>"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Create a {request.diagramType} diagram for: {request.conceptName}\nContext: {request.explanation}")
+        response = await chat.send_message(user_msg)
+        
+        svg_content = response.strip() if response else ""
+        if "<svg" in svg_content:
+            start = svg_content.find("<svg")
+            end = svg_content.rfind("</svg>") + 6
+            svg_content = svg_content[start:end]
+        else:
+            svg_content = f'<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg"><rect width="800" height="500" fill="#1E1E1E"/><text x="400" y="250" fill="#FFFFFF" text-anchor="middle" font-size="20">{request.conceptName}</text></svg>'
+        
+        return VisualDiagramResponse(svg=svg_content)
+    except Exception as e:
+        logger.error(f"Diagram error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/english-chat", response_model=EnglishChatResponse)
+async def english_chat(request: EnglishChatRequest):
+    """English learning assistant"""
+    try:
+        system_prompt = """You are a friendly English tutor.
+        
+Respond ONLY with valid JSON:
+{
+    "response": "Your helpful response",
+    "intent": "question|practice|conversation",
+    "corrections": [{"original": "text", "corrected": "text", "explanation": "why"}]
+}"""
+        
+        chat = get_chat_instance(system_prompt)
+        context = "\n".join([f"{m.role}: {m.content}" for m in request.conversationHistory[-5:]])
+        user_msg = UserMessage(text=f"History:\n{context}\n\nNew message: {request.message}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "response": response or "I'm here to help!",
+            "intent": "conversation",
+            "corrections": []
+        })
+        
+        return EnglishChatResponse(
+            response=data.get("response", "I'm here to help!"),
+            intent=data.get("intent", "conversation"),
+            corrections=[Correction(**c) for c in data.get("corrections", [])]
+        )
+    except Exception as e:
+        logger.error(f"English chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/project/{project_id}/structure")
+async def get_project_structure(project_id: str):
+    """Get updated project structure"""
     try:
         project = await projects_collection.find_one({"project_id": project_id})
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         
-        return {"files": project.get("files", [])}
+        workspace_path = Path(project['workspace_path'])
         
+        file_tree = build_file_tree(workspace_path)
+        language_stats = calculate_language_stats(workspace_path)
+        
+        return {
+            "root": file_tree.model_dump(),
+            "languages": [ls.model_dump() for ls in language_stats]
+        }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get project files error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.delete("/session-memory/{session_id}")
-async def clear_session_memory(session_id: str):
-    """Clear session memory"""
-    try:
-        result = await sessions_collection.delete_many({"session_id": session_id})
-        return {"deleted": result.deleted_count}
-    except Exception as e:
-        logger.error(f"Clear session memory error: {e}")
+        logger.error(f"Get structure error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Include the router
