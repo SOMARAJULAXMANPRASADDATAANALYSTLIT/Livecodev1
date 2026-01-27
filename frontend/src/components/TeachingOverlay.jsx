@@ -1,13 +1,23 @@
-import { useState, useEffect } from "react";
-import { X, ChevronDown, ChevronUp, CheckCircle, Loader2, BookOpen, Lightbulb, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X, ChevronDown, ChevronUp, CheckCircle, Loader2, BookOpen, Lightbulb, AlertTriangle, HelpCircle, Image, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-const TeachingOverlay = ({ code, bug, onClose }) => {
+const DIAGRAM_TYPES = [
+  { value: "flowchart", label: "Flowchart", description: "Step-by-step logic flow" },
+  { value: "state_flow", label: "State Flow", description: "State changes and transitions" },
+  { value: "async_timeline", label: "Timeline", description: "Async operations timeline" },
+  { value: "data_flow", label: "Data Flow", description: "How data moves through code" },
+  { value: "memory_model", label: "Memory", description: "Stack and heap visualization" },
+  { value: "sequence", label: "Sequence", description: "Function call sequence" },
+];
+
+const TeachingOverlay = ({ code, bug, skillLevel = "intermediate", onClose }) => {
   const [teaching, setTeaching] = useState(null);
   const [deeperExplanation, setDeeperExplanation] = useState(null);
   const [svgDiagram, setSvgDiagram] = useState(null);
@@ -18,6 +28,13 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
   const [studentAnswer, setStudentAnswer] = useState("");
   const [evaluationResult, setEvaluationResult] = useState(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  
+  // Enhanced features
+  const [selectedDiagramType, setSelectedDiagramType] = useState("flowchart");
+  const [isLoadingDiagram, setIsLoadingDiagram] = useState(false);
+  const [followUpQuestion, setFollowUpQuestion] = useState(null);
+  const [smartQuestion, setSmartQuestion] = useState(null);
+  const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
 
   useEffect(() => {
     fetchTeaching();
@@ -32,6 +49,7 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
           code,
           bug: { line: bug.line, message: bug.message },
           mentorStyle: "patient",
+          skill_level: skillLevel,
         }),
       });
 
@@ -60,6 +78,7 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
         body: JSON.stringify({
           conceptName: teaching.conceptName,
           currentExplanation: teaching.naturalExplanation,
+          skill_level: skillLevel,
         }),
       });
 
@@ -68,15 +87,30 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
         setDeeperExplanation(deeperData);
       }
 
-      // Fetch visual diagram
+      // Fetch visual diagram with selected type
+      await fetchDiagram(selectedDiagramType);
+    } catch (error) {
+      console.error("Deeper explanation error:", error);
+      toast.error("Failed to load deeper explanation");
+    } finally {
+      setIsLoadingDeeper(false);
+    }
+  };
+
+  const fetchDiagram = async (diagramType) => {
+    if (!teaching) return;
+    
+    setIsLoadingDiagram(true);
+    try {
       const diagramResponse = await fetch(`${BACKEND_URL}/api/generate-visual-diagram`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conceptName: teaching.conceptName,
-          diagramType: "state_flow",
+          diagramType: diagramType,
           code,
           explanation: teaching.naturalExplanation,
+          skill_level: skillLevel,
         }),
       });
 
@@ -85,10 +119,17 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
         setSvgDiagram(diagramData.svg);
       }
     } catch (error) {
-      console.error("Deeper explanation error:", error);
-      toast.error("Failed to load deeper explanation");
+      console.error("Diagram error:", error);
+      toast.error("Failed to generate diagram");
     } finally {
-      setIsLoadingDeeper(false);
+      setIsLoadingDiagram(false);
+    }
+  };
+
+  const handleDiagramTypeChange = (type) => {
+    setSelectedDiagramType(type);
+    if (showDeeper && teaching) {
+      fetchDiagram(type);
     }
   };
 
@@ -104,6 +145,7 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
           question: `Explain the concept: ${teaching.conceptName}`,
           studentAnswer,
           correctConcept: teaching.naturalExplanation,
+          skill_level: skillLevel,
         }),
       });
 
@@ -114,12 +156,54 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
       if (data.understood) {
         toast.success("Great job! You understood the concept!");
       }
+
+      // If there's a follow-up question, show it
+      if (data.follow_up_question) {
+        setFollowUpQuestion(data.follow_up_question);
+      }
     } catch (error) {
       console.error("Evaluation error:", error);
       toast.error("Failed to evaluate answer");
     } finally {
       setIsEvaluating(false);
     }
+  };
+
+  const generateSmartQuestion = async () => {
+    if (!teaching) return;
+
+    setIsLoadingQuestion(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/generate-smart-question`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          concept_taught: teaching.conceptName,
+          skill_level: skillLevel,
+          previous_questions: smartQuestion ? [smartQuestion.question] : [],
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSmartQuestion(data);
+      }
+    } catch (error) {
+      console.error("Smart question error:", error);
+      toast.error("Failed to generate question");
+    } finally {
+      setIsLoadingQuestion(false);
+    }
+  };
+
+  const getSkillLevelBadge = () => {
+    const colors = {
+      beginner: "bg-green-500/20 text-green-400",
+      intermediate: "bg-blue-500/20 text-blue-400",
+      advanced: "bg-purple-500/20 text-purple-400",
+      senior: "bg-orange-500/20 text-orange-400",
+    };
+    return colors[skillLevel] || colors.intermediate;
   };
 
   return (
@@ -140,7 +224,12 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
               <h2 className="text-lg font-bold">
                 {isLoadingTeaching ? "Loading..." : teaching?.conceptName || "Understanding the Bug"}
               </h2>
-              <p className="text-xs text-white/50">Line {bug.line}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-xs text-white/50">Line {bug.line}</p>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${getSkillLevelBadge()}`}>
+                  {skillLevel}
+                </span>
+              </div>
             </div>
           </div>
           <button
@@ -200,43 +289,74 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
                   ) : (
                     <ChevronDown className="w-4 h-4" />
                   )}
-                  {showDeeper ? "Show Less" : "Show More"}
+                  {showDeeper ? "Show Less" : "Show More & Visual Explanation"}
                 </button>
 
-                {showDeeper && deeperExplanation && (
+                {showDeeper && (
                   <div className="mt-4 space-y-4 animate-slideUp">
-                    <div className="glass-light rounded-xl p-4">
-                      <h3 className="font-semibold mb-3">Deeper Explanation</h3>
-                      <div className="text-white/80 prose prose-invert prose-sm max-w-none">
-                        <ReactMarkdown>{deeperExplanation.deeperExplanation}</ReactMarkdown>
-                      </div>
-                    </div>
-
-                    {deeperExplanation.codeExamples?.length > 0 && (
-                      <div className="glass-light rounded-xl p-4">
-                        <h3 className="font-semibold mb-3">Code Examples</h3>
-                        <div className="space-y-2">
-                          {deeperExplanation.codeExamples.map((example, i) => (
-                            <pre key={i} className="bg-black/30 rounded-lg p-3 text-sm overflow-x-auto">
-                              <code>{example}</code>
-                            </pre>
-                          ))}
+                    {deeperExplanation && (
+                      <>
+                        <div className="glass-light rounded-xl p-4">
+                          <h3 className="font-semibold mb-3">Deeper Explanation</h3>
+                          <div className="text-white/80 prose prose-invert prose-sm max-w-none">
+                            <ReactMarkdown>{deeperExplanation.deeperExplanation}</ReactMarkdown>
+                          </div>
                         </div>
-                      </div>
+
+                        {deeperExplanation.codeExamples?.length > 0 && (
+                          <div className="glass-light rounded-xl p-4">
+                            <h3 className="font-semibold mb-3">Code Examples</h3>
+                            <div className="space-y-2">
+                              {deeperExplanation.codeExamples.map((example, i) => (
+                                <pre key={i} className="bg-black/30 rounded-lg p-3 text-sm overflow-x-auto">
+                                  <code>{example}</code>
+                                </pre>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
 
-                    {svgDiagram && (
-                      <div className="glass-light rounded-xl p-4">
-                        <h3 className="font-semibold mb-3">Visual Diagram</h3>
+                    {/* Visual Diagram with Type Selection */}
+                    <div className="glass-light rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Image className="w-5 h-5 text-[#667eea]" />
+                          <h3 className="font-semibold">Visual Explanation</h3>
+                        </div>
+                        <Select value={selectedDiagramType} onValueChange={handleDiagramTypeChange}>
+                          <SelectTrigger className="w-36 h-8 text-xs bg-white/5 border-white/10">
+                            <SelectValue placeholder="Diagram type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DIAGRAM_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                <div>
+                                  <span>{type.label}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      {isLoadingDiagram ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-[#667eea]" />
+                        </div>
+                      ) : svgDiagram ? (
                         <div 
                           data-testid="svg-diagram"
-                          className="diagram-container bg-black/20 rounded-xl p-4"
+                          className="diagram-container bg-black/20 rounded-xl p-4 overflow-auto"
                           dangerouslySetInnerHTML={{ __html: svgDiagram }}
                         />
-                      </div>
-                    )}
+                      ) : (
+                        <p className="text-white/50 text-center py-4">No diagram available</p>
+                      )}
+                    </div>
 
-                    {deeperExplanation.relatedConcepts?.length > 0 && (
+                    {deeperExplanation?.relatedConcepts?.length > 0 && (
                       <div className="flex flex-wrap gap-2">
                         <span className="text-sm text-white/50">Related:</span>
                         {deeperExplanation.relatedConcepts.map((concept, i) => (
@@ -250,21 +370,57 @@ const TeachingOverlay = ({ code, bug, onClose }) => {
                 )}
               </div>
 
-              {/* Self-Check */}
+              {/* Smart Question Section */}
               <div className="border-t border-white/10 pt-6">
-                <button
-                  data-testid="check-understanding-btn"
-                  onClick={() => setShowEvaluation(!showEvaluation)}
-                  className="text-sm text-white/60 hover:text-white flex items-center gap-2"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Check my understanding
-                </button>
+                <div className="flex items-center justify-between mb-3">
+                  <button
+                    onClick={() => setShowEvaluation(!showEvaluation)}
+                    className="text-sm text-white/60 hover:text-white flex items-center gap-2"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Check my understanding
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={generateSmartQuestion}
+                    disabled={isLoadingQuestion}
+                    className="text-xs text-[#667eea]"
+                  >
+                    {isLoadingQuestion ? (
+                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                    ) : (
+                      <Sparkles className="w-3 h-3 mr-1" />
+                    )}
+                    Quiz Me
+                  </Button>
+                </div>
+
+                {/* Smart Question Display */}
+                {smartQuestion && (
+                  <div className="mb-4 glass-light rounded-xl p-4 border border-[#667eea]/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <HelpCircle className="w-4 h-4 text-[#667eea]" />
+                      <span className="text-xs text-white/50">
+                        {smartQuestion.difficulty} question
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium mb-3">{smartQuestion.question}</p>
+                    <details className="text-xs text-white/50">
+                      <summary className="cursor-pointer hover:text-white/70">Show hints</summary>
+                      <ul className="mt-2 space-y-1 pl-4">
+                        {smartQuestion.expected_answer_hints?.map((hint, i) => (
+                          <li key={i}>• {hint}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  </div>
+                )}
 
                 {showEvaluation && (
                   <div className="mt-4 space-y-3 animate-slideUp">
                     <p className="text-sm text-white/70">
-                      Explain in your own words what you learned about {teaching.conceptName}:
+                      {followUpQuestion || `Explain in your own words what you learned about ${teaching.conceptName}:`}
                     </p>
                     <Textarea
                       data-testid="student-answer-input"
