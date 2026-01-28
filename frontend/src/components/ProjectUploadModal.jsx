@@ -322,6 +322,7 @@ const ProjectUploadModal = ({ onClose, onProjectLoaded }) => {
           </Button>
         </div>
       </div>
+    </div>
       
       {/* Teaching Modal */}
       {showTeachingModal && projectData && analysisResult && (
