@@ -3594,6 +3594,62 @@ Return JSON with youtube_playlists and free_courses arrays.""")
         logger.error(f"Learning resources research error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Manual YouTube URL addition for topics
+class AddVideoRequest(BaseModel):
+    topic_id: str
+    video_url: str
+    video_title: str = ""
+
+@api_router.post("/learning/topic/add-video")
+async def add_video_to_topic(request: AddVideoRequest):
+    """Allow users to manually add YouTube videos to their learning topics"""
+    try:
+        # Extract video ID from URL
+        video_id = None
+        if "youtube.com/watch?v=" in request.video_url:
+            video_id = request.video_url.split("watch?v=")[1].split("&")[0]
+        elif "youtu.be/" in request.video_url:
+            video_id = request.video_url.split("youtu.be/")[1].split("?")[0]
+        
+        if not video_id:
+            raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+        
+        # Fetch video metadata using Gemini to analyze
+        system_prompt = """You are analyzing a YouTube video to help create learning content.
+        
+Based on the video URL provided, return JSON with:
+{
+    "title": "video title if known",
+    "estimated_duration": "duration if known",
+    "topics_covered": ["topic1", "topic2"],
+    "difficulty_level": "beginner|intermediate|advanced"
+}"""
+        
+        chat = get_chat_instance(system_prompt, model_type="fast")
+        user_msg = UserMessage(text=f"""Analyze this YouTube video: https://www.youtube.com/watch?v={video_id}
+        
+Title provided by user: {request.video_title or 'Not provided'}
+
+Return JSON with video metadata.""")
+        
+        response = await chat.send_message(user_msg)
+        metadata = safe_parse_json(response, {
+            "title": request.video_title or "Custom Video",
+            "estimated_duration": "Unknown"
+        })
+        
+        return {
+            "success": True,
+            "video_id": video_id,
+            "video_url": f"https://www.youtube.com/watch?v={video_id}",
+            "metadata": metadata,
+            "message": "Video added to learning topic"
+        }
+        
+    except Exception as e:
+        logger.error(f"Add video error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Video Learning Q&A
 class VideoQARequest(BaseModel):
     question: str
