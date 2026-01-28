@@ -979,6 +979,80 @@ const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTop
           </div>
         </div>
 
+        {/* Online Resources Section */}
+        {onlineResources && (onlineResources.youtube_playlists?.length > 0 || onlineResources.free_courses?.length > 0) && (
+          <div className="mb-6 p-5 bg-gradient-to-r from-[#EA4335]/10 to-[#FBBC04]/10 border border-[#EA4335]/30 rounded-xl">
+            <div className="flex items-center gap-2 mb-4">
+              <Youtube className="w-5 h-5 text-[#EA4335]" />
+              <h3 className="font-bold">🎓 Free Learning Resources</h3>
+            </div>
+            
+            {/* YouTube Playlists */}
+            {onlineResources.youtube_playlists && onlineResources.youtube_playlists.length > 0 && (
+              <div className="space-y-2 mb-4">
+                <h4 className="text-sm font-semibold text-white/70">📺 YouTube Playlists</h4>
+                {onlineResources.youtube_playlists.slice(0, 3).map((playlist, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onPlayVideo && onPlayVideo({
+                      url: playlist.url,
+                      title: playlist.title
+                    })}
+                    className="w-full p-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#EA4335]/50 rounded-lg transition-all text-left group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-[#EA4335]/20 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                        <Play className="w-5 h-5 text-[#EA4335]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-white group-hover:text-[#EA4335] transition-colors line-clamp-1">
+                          {playlist.title}
+                        </div>
+                        <div className="text-xs text-white/50 mt-1">
+                          {playlist.channel && `${playlist.channel} • `}
+                          {playlist.estimated_duration || "Video Series"}
+                        </div>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-[#EA4335] flex-shrink-0" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Free Courses */}
+            {onlineResources.free_courses && onlineResources.free_courses.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold text-white/70">🎓 Free Courses</h4>
+                {onlineResources.free_courses.slice(0, 3).map((course, idx) => (
+                  <a
+                    key={idx}
+                    href={course.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block p-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#34A853]/50 rounded-lg transition-all group"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-[#34A853]/20 flex items-center justify-center flex-shrink-0">
+                        <BookOpen className="w-5 h-5 text-[#34A853]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-white group-hover:text-[#34A853] transition-colors line-clamp-1">
+                          {course.title}
+                        </div>
+                        <div className="text-xs text-white/50 mt-1">
+                          {course.platform} • {course.level || "All levels"}
+                        </div>
+                      </div>
+                      <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-[#34A853]" />
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Skill tree */}
         <div className="space-y-2">
           {skillTree?.nodes?.map(node => renderTreeNode(node))}
