@@ -71,6 +71,8 @@ const CodeLearningView = () => {
   const [selectedLines, setSelectedLines] = useState([]);
   const [showLineMentoring, setShowLineMentoring] = useState(false);
   const [editorInstance, setEditorInstance] = useState(null);
+  const [showCodeHelpPopup, setShowCodeHelpPopup] = useState(false);
+  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
 
   // Code execution states
   const [showExecution, setShowExecution] = useState(false);
