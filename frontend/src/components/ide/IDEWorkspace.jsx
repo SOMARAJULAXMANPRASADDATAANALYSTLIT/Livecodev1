@@ -12,8 +12,8 @@ const Editor = lazy(() => import("@monaco-editor/react"));
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Recursive File Tree Component with drill-down
-const FileTree = React.memo(function FileTree({ node, onSelect, selected, level = 0 }) {
+// File Tree Component - Non-recursive to avoid Babel issues
+const FileTreeNode = React.memo(function FileTreeNode({ node, onSelect, selected, level = 0 }) {
   const [expanded, setExpanded] = useState(level < 2);
   
   if (!node) return null;
@@ -21,16 +21,8 @@ const FileTree = React.memo(function FileTree({ node, onSelect, selected, level 
   const isFolder = node.type === 'directory' || node.children?.length > 0;
   const isSelected = selected === node.path;
   
-  const renderChildren = () => {
-    if (!isFolder || !expanded || !node.children) return null;
-    
-    return node.children.map((child, i) => (
-      <FileTree key={child.path || i} node={child} onSelect={onSelect} selected={selected} level={level + 1} />
-    ));
-  };
-  
   return (
-    <div>
+    <>
       <div
         className={`flex items-center py-1 px-2 cursor-pointer hover:bg-white/10 rounded ${isSelected ? 'bg-[#667eea]/20' : ''}`}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
@@ -52,10 +44,20 @@ const FileTree = React.memo(function FileTree({ node, onSelect, selected, level 
         )}
         <span className="text-sm truncate">{node.name}</span>
       </div>
-      {renderChildren()}
-    </div>
+      {isFolder && expanded && node.children && 
+        node.children.map((child, i) => (
+          <FileTreeNode key={child.path || i} node={child} onSelect={onSelect} selected={selected} level={level + 1} />
+        ))
+      }
+    </>
   );
 });
+
+// Wrapper to start the tree
+function FileTree({ node, onSelect, selected }) {
+  if (!node) return null;
+  return <FileTreeNode node={node} onSelect={onSelect} selected={selected} level={0} />;
+}
 
 // Run Commands Panel
 function RunCommandsPanel({ commands, onRunCommand }) {
