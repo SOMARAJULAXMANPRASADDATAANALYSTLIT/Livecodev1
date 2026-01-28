@@ -3246,7 +3246,7 @@ Research competitors and market positioning:
 
 Respond with JSON."""
         
-        chat3 = get_chat_instance(system_prompt_stage3)
+        chat3 = get_chat_instance(system_prompt_stage3, model_type="pro")
         user_msg3 = UserMessage(text=f"Competitive analysis for {stage1_data.get('company_name', 'company')}")
         response3 = await chat3.send_message(user_msg3)
         stage3_data = safe_parse_json(response3, {})
