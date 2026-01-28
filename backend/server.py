@@ -3225,7 +3225,7 @@ Research the company's products/services deeply:
 
 Respond with JSON."""
         
-        chat2 = get_chat_instance(system_prompt_stage2)
+        chat2 = get_chat_instance(system_prompt_stage2, model_type="pro")
         user_msg2 = UserMessage(text=f"Analyze products for {request.company_url} based on: {stage1_data}")
         response2 = await chat2.send_message(user_msg2)
         stage2_data = safe_parse_json(response2, {})
