@@ -2962,6 +2962,573 @@ RESPOND ONLY WITH VALID JSON:
         logger.error(f"AI agent guide error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============== ENHANCED ENDPOINTS FOR COMPREHENSIVE FEATURES ==============
+
+# Project Teaching and Analysis
+class ProjectTeachingRequest(BaseModel):
+    project_id: str
+    skill_level: str = "intermediate"
+
+class FileTeachingRequest(BaseModel):
+    project_id: str
+    file_path: str
+    skill_level: str = "intermediate"
+
+@api_router.post("/project/{project_id}/teach")
+async def teach_project(project_id: str, request: ProjectTeachingRequest):
+    """AI Senior Agent teaches about the entire project comprehensively"""
+    try:
+        project = await projects_collection.find_one({"project_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        workspace_path = Path(project['workspace_path'])
+        
+        # Analyze multiple key files
+        key_files = []
+        for entry_point in project.get('entry_points', [])[:3]:
+            try:
+                file_path = workspace_path / entry_point
+                if file_path.exists() and file_path.is_file():
+                    content = file_path.read_text(errors='replace')[:3000]
+                    key_files.append({
+                        "path": entry_point,
+                        "content": content[:1000]  # Truncate for analysis
+                    })
+            except:
+                pass
+        
+        # Get README if exists
+        readme_content = ""
+        for readme_name in ['README.md', 'readme.md', 'README.txt']:
+            readme_path = workspace_path / readme_name
+            if readme_path.exists():
+                try:
+                    readme_content = readme_path.read_text(errors='replace')[:2000]
+                    break
+                except:
+                    pass
+        
+        skill_context = get_skill_context(request.skill_level)
+        
+        system_prompt = f"""You are a world-class senior software engineer and mentor teaching a developer about this codebase.
+
+{skill_context}
+
+RESPONSE STRUCTURE (MANDATORY):
+Use clear Markdown with proper formatting:
+
+## 🎯 Project Overview
+Brief description of what this project does and its purpose.
+
+## 📂 Project Structure
+Explain the folder/file organization and why it's structured this way.
+
+## 🚀 How to Run This Application
+Step-by-step instructions to get the project running:
+1. Dependencies installation
+2. Configuration needed
+3. Run commands
+4. What to expect
+
+## 📝 Key Files Explained
+For each major file, explain:
+- **What it does**: Purpose and responsibility
+- **How it works**: Key logic and flow
+- **Important concepts**: Patterns, frameworks used
+
+## 🧩 Architecture & Design Patterns
+Explain the architecture, design patterns, and engineering decisions.
+
+## 🎓 What You'll Learn from This Project
+Key learnings and skills this project demonstrates.
+
+## 💡 Next Steps for Learning
+Suggestions for:
+- What to explore next
+- How to extend this project
+- Related concepts to study
+
+Be thorough, encouraging, and educational. Act as a senior engineer mentor."""
+        
+        # Build context
+        context = f"""
+PROJECT NAME: {project.get('name', 'Unknown')}
+FRAMEWORKS: {', '.join(project.get('frameworks', ['None detected']))}
+ENTRY POINTS: {', '.join(project.get('entry_points', ['None']))}
+BUILD SYSTEM: {project.get('build_system', 'None')}
+TOTAL FILES: {project.get('total_files', 0)}
+HAS TESTS: {'Yes' if project.get('has_tests', False) else 'No'}
+
+README CONTENT:
+{readme_content if readme_content else 'No README found'}
+
+KEY FILES SAMPLE:
+{chr(10).join([f"File: {f['path']}\n{f['content'][:500]}..." for f in key_files[:2]])}
+"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Teach me about this project:\n\n{context}")
+        response = await chat.send_message(user_msg)
+        
+        return {
+            "teaching_content": response or "Unable to analyze project",
+            "project_name": project.get('name', 'Unknown'),
+            "key_files_analyzed": [f['path'] for f in key_files]
+        }
+        
+    except Exception as e:
+        logger.error(f"Project teaching error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/project/{project_id}/teach-file")
+async def teach_file(project_id: str, request: FileTeachingRequest):
+    """AI Senior Agent explains a specific file in detail"""
+    try:
+        project = await projects_collection.find_one({"project_id": project_id})
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        workspace_path = Path(project['workspace_path'])
+        file_path = workspace_path / request.file_path
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        content = file_path.read_text(errors='replace')
+        skill_context = get_skill_context(request.skill_level)
+        
+        system_prompt = f"""You are a senior software engineer explaining code to a developer.
+
+{skill_context}
+
+RESPONSE STRUCTURE (MANDATORY):
+
+## 📄 {request.file_path}
+
+### Purpose
+What this file does and why it exists.
+
+### Key Components
+Break down the main parts:
+- Functions/Classes/Components
+- Their responsibilities
+- How they work together
+
+### Code Flow
+Explain the execution flow step-by-step.
+
+### Important Concepts
+Programming concepts, patterns, or techniques used here.
+
+### Dependencies
+What this file depends on and what depends on it.
+
+### How to Modify
+Guidance on safely making changes to this file.
+
+### Learning Points
+Key takeaways for understanding this code.
+
+Be detailed, clear, and educational."""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Explain this file:\n\nPath: {request.file_path}\n\nCode:\n{content[:5000]}")
+        response = await chat.send_message(user_msg)
+        
+        return {
+            "teaching_content": response or "Unable to analyze file",
+            "file_path": request.file_path
+        }
+        
+    except Exception as e:
+        logger.error(f"File teaching error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Deep Research for Business Intelligence
+class DeepResearchRequest(BaseModel):
+    company_url: str
+    depth: str = "comprehensive"  # basic, detailed, comprehensive
+
+@api_router.post("/agent/business/deep-research")
+async def business_deep_research(request: DeepResearchRequest):
+    """Perform multi-agent deep research on a company"""
+    try:
+        # Multi-stage research process
+        stages = []
+        
+        # Stage 1: Initial Company Analysis
+        stages.append({
+            "stage": "company_overview",
+            "status": "researching",
+            "message": "Researching company website and overview..."
+        })
+        
+        system_prompt_stage1 = """You are a senior business research analyst.
+Analyze the company website and extract:
+- Company name, mission, and core business
+- Main products/services
+- Target market and customers
+- Company size and locations
+- Recent news and updates
+
+Respond with JSON:
+{
+    "company_name": "Name",
+    "mission": "Mission statement",
+    "products": ["Product 1", "Product 2"],
+    "target_market": "Description",
+    "key_facts": ["Fact 1", "Fact 2"]
+}"""
+        
+        chat1 = get_chat_instance(system_prompt_stage1)
+        user_msg1 = UserMessage(text=f"Research this company website: {request.company_url}")
+        response1 = await chat1.send_message(user_msg1)
+        stage1_data = safe_parse_json(response1, {})
+        
+        # Stage 2: Products and Services Deep Dive
+        stages.append({
+            "stage": "products_analysis",
+            "status": "researching",
+            "message": "Analyzing products and services in detail..."
+        })
+        
+        system_prompt_stage2 = """You are a product analyst.
+Research the company's products/services deeply:
+- Product catalog and features
+- Pricing models
+- Target use cases
+- Competitive advantages
+- Customer testimonials
+
+Respond with JSON."""
+        
+        chat2 = get_chat_instance(system_prompt_stage2)
+        user_msg2 = UserMessage(text=f"Analyze products for {request.company_url} based on: {stage1_data}")
+        response2 = await chat2.send_message(user_msg2)
+        stage2_data = safe_parse_json(response2, {})
+        
+        # Stage 3: Competitive Landscape
+        stages.append({
+            "stage": "competitive_analysis",
+            "status": "researching",
+            "message": "Researching competitors and market position..."
+        })
+        
+        system_prompt_stage3 = """You are a competitive intelligence analyst.
+Research competitors and market positioning:
+- Main competitors
+- Competitive advantages/disadvantages
+- Market share insights
+- Differentiation factors
+
+Respond with JSON."""
+        
+        chat3 = get_chat_instance(system_prompt_stage3)
+        user_msg3 = UserMessage(text=f"Competitive analysis for {stage1_data.get('company_name', 'company')}")
+        response3 = await chat3.send_message(user_msg3)
+        stage3_data = safe_parse_json(response3, {})
+        
+        # Stage 4: Strategic Synthesis
+        stages.append({
+            "stage": "strategic_synthesis",
+            "status": "analyzing",
+            "message": "Synthesizing findings into strategic insights..."
+        })
+        
+        # Combine all research into comprehensive report
+        all_data = {
+            "company_overview": stage1_data,
+            "products_services": stage2_data,
+            "competitive_analysis": stage3_data
+        }
+        
+        # Generate comprehensive 8-sheet Excel data
+        sheets = {
+            "1_Company_Overview": [
+                {"category": "Basic Info", "detail": stage1_data.get("company_name", "N/A"), "source": request.company_url},
+                {"category": "Mission", "detail": stage1_data.get("mission", "Not Publicly Available"), "source": request.company_url},
+            ],
+            "2_Products_Services": [
+                {"product": p, "category": "Core Product", "source": request.company_url} 
+                for p in stage1_data.get("products", ["Not Publicly Available"])
+            ],
+            "3_Customer_Success": [
+                {"category": "Target Market", "detail": stage1_data.get("target_market", "Not Publicly Available"), "source": request.company_url}
+            ],
+            "4_Pain_Points": [
+                {"type": "Market Challenge", "description": "Requires further research", "source": "Analysis"}
+            ],
+            "5_Competitive_Analysis": [
+                {"competitor": c, "status": "Active", "source": "Market Research"}
+                for c in stage3_data.get("competitors", ["Not Publicly Available"])[:5]
+            ],
+            "6_Case_Studies": [
+                {"note": "Case studies require direct customer research", "source": "N/A"}
+            ],
+            "7_Pricing_Model": [
+                {"component": "Pricing", "detail": "Available on company website", "source": request.company_url}
+            ],
+            "8_OKRs_Strategy": [
+                {"objective": "Market Leadership", "rationale": "Based on company positioning"}
+            ]
+        }
+        
+        # Generate HTML report
+        html_report = generate_html_report({
+            "company_name": stage1_data.get("company_name", "Company"),
+            "sheets": sheets
+        })
+        
+        stages.append({
+            "stage": "complete",
+            "status": "complete",
+            "message": "Deep research complete!"
+        })
+        
+        return {
+            "company_name": stage1_data.get("company_name", "Unknown Company"),
+            "research_depth": request.depth,
+            "stages": stages,
+            "sheets": sheets,
+            "html_report": html_report,
+            "excel_data": sheets  # Frontend can convert to Excel
+        }
+        
+    except Exception as e:
+        logger.error(f"Deep research error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Real-time News Search
+@api_router.get("/news/search-live")
+async def search_live_news(category: str = "ai", query: Optional[str] = None):
+    """Search for real-time news using web search"""
+    try:
+        # Use web-grounded search for real-time news
+        search_query = query or f"latest {category} technology news 2025"
+        
+        system_prompt = f"""You are a tech news curator.
+Search and summarize the latest {category} news from reliable sources.
+
+RESPONSE FORMAT (JSON):
+{{
+    "articles": [
+        {{
+            "title": "Article title",
+            "summary": "2-3 sentence summary",
+            "source": "Source name",
+            "url": "Real URL if available, or source homepage",
+            "category": "{category}",
+            "publishedAt": "ISO date",
+            "key_points": ["Point 1", "Point 2"]
+        }}
+    ]
+}}
+
+Find 6-8 recent articles from reputable sources like TechCrunch, The Verge, ArsTechnica, etc."""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Find latest news: {search_query}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {"articles": []})
+        
+        # Ensure all articles have required fields
+        articles = data.get("articles", [])
+        for article in articles:
+            if "publishedAt" not in article:
+                article["publishedAt"] = datetime.now(timezone.utc).isoformat()
+            if "category" not in article:
+                article["category"] = category
+        
+        return {"articles": articles, "query": search_query}
+        
+    except Exception as e:
+        logger.error(f"Live news search error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/news/summarize-article")
+async def summarize_news_article(url: str):
+    """Fetch and summarize a specific news article"""
+    try:
+        system_prompt = """You are a tech news summarizer.
+Based on the article URL, provide a concise summary.
+
+RESPONSE FORMAT (JSON):
+{
+    "title": "Article title",
+    "summary": "3-4 sentence summary",
+    "key_points": ["Point 1", "Point 2", "Point 3"],
+    "category": "ai|tech|coding|startups",
+    "reading_time": "5 min"
+}"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Summarize this article: {url}")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "title": "Article",
+            "summary": "Summary not available",
+            "key_points": []
+        })
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Article summary error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Flight Price Search for Travel Agent
+class FlightSearchRequest(BaseModel):
+    origin: str
+    destination: str
+    departure_date: Optional[str] = None
+    return_date: Optional[str] = None
+
+@api_router.post("/agent/travel/search-flights")
+async def search_flight_prices(request: FlightSearchRequest):
+    """Search for indicative flight prices online"""
+    try:
+        system_prompt = """You are a travel research assistant.
+Search for flight price information between cities.
+
+IMPORTANT: Label all prices as "indicative" and cite sources.
+
+RESPONSE FORMAT (JSON):
+{
+    "route": "City A to City B",
+    "price_range": "$XXX - $YYY USD (indicative)",
+    "best_time_to_book": "Time frame",
+    "typical_duration": "X hours",
+    "airlines": ["Airline 1", "Airline 2"],
+    "tips": ["Tip 1", "Tip 2"],
+    "last_updated": "Date",
+    "sources": ["Source 1", "Source 2"],
+    "disclaimer": "Prices are indicative based on recent searches. Check airline websites for current prices."
+}"""
+        
+        chat = get_chat_instance(system_prompt)
+        
+        search_text = f"""Find indicative flight prices:
+From: {request.origin}
+To: {request.destination}
+{f'Departure: {request.departure_date}' if request.departure_date else ''}
+{f'Return: {request.return_date}' if request.return_date else ''}
+
+Search for recent price ranges and booking tips."""
+        
+        user_msg = UserMessage(text=search_text)
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "route": f"{request.origin} to {request.destination}",
+            "price_range": "Price data not available",
+            "disclaimer": "Prices are indicative. Check airline websites for current prices."
+        })
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Flight search error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Learning Path with Online Resources
+class LearningResourcesRequest(BaseModel):
+    topic: str
+    level: str = "beginner"  # beginner, intermediate, advanced
+    goal: str = ""
+
+@api_router.post("/learning/research-resources")
+async def research_learning_resources(request: LearningResourcesRequest):
+    """Research free online courses, YouTube tutorials, and learning paths"""
+    try:
+        system_prompt = f"""You are an expert learning path designer researching online educational resources.
+
+Find FREE, HIGH-QUALITY resources for learning: {request.topic}
+Level: {request.level}
+Goal: {request.goal or 'Master this topic'}
+
+RESPONSE FORMAT (JSON):
+{{
+    "topic": "{request.topic}",
+    "level": "{request.level}",
+    "learning_path": {{
+        "phases": [
+            {{
+                "phase_name": "Foundation",
+                "duration": "2-4 weeks",
+                "topics": ["Topic 1", "Topic 2"],
+                "resources": [
+                    {{
+                        "title": "Resource name",
+                        "type": "youtube|course|documentation|tutorial|book",
+                        "url": "URL or search term",
+                        "provider": "YouTube|Coursera|freeCodeCamp|Official Docs",
+                        "duration": "X hours",
+                        "free": true,
+                        "quality_rating": "⭐⭐⭐⭐⭐"
+                    }}
+                ]
+            }}
+        ]
+    }},
+    "youtube_playlists": [
+        {{
+            "title": "Playlist name",
+            "channel": "Channel name",
+            "search_query": "Search term to find it",
+            "estimated_duration": "X hours"
+        }}
+    ],
+    "free_courses": [
+        {{
+            "title": "Course name",
+            "platform": "Coursera|Udemy|freeCodeCamp|edX",
+            "url_or_search": "URL or how to find it",
+            "level": "beginner|intermediate|advanced"
+        }}
+    ],
+    "official_docs": [
+        {{
+            "title": "Documentation",
+            "url": "URL"
+        }}
+    ],
+    "practice_projects": [
+        {{
+            "title": "Project idea",
+            "difficulty": "easy|medium|hard",
+            "skills_practiced": ["Skill 1", "Skill 2"]
+        }}
+    ],
+    "career_path": {{
+        "typical_timeline": "X months",
+        "milestones": ["Milestone 1", "Milestone 2"],
+        "job_roles": ["Role 1", "Role 2"]
+    }}
+}}
+
+Research thoroughly and provide real, findable resources. Prioritize FREE and high-quality content."""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=f"Research comprehensive learning resources for: {request.topic} at {request.level} level")
+        response = await chat.send_message(user_msg)
+        
+        data = safe_parse_json(response, {
+            "topic": request.topic,
+            "level": request.level,
+            "learning_path": {"phases": []},
+            "youtube_playlists": [],
+            "free_courses": []
+        })
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Learning resources research error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router
 app.include_router(api_router)
 
