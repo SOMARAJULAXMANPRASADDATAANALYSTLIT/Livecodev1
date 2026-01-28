@@ -30,12 +30,15 @@ const AINewsFeed = () => {
   const fetchNews = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/news/feed?category=${category}`);
+      // Use live search endpoint for real-time news
+      const response = await fetch(`${BACKEND_URL}/api/news/search-live?category=${category}`);
       if (!response.ok) throw new Error("Failed to fetch news");
       const data = await response.json();
       setNews(data.articles || []);
+      toast.success("Latest news loaded!");
     } catch (error) {
       console.error("News fetch error:", error);
+      toast.error("Failed to fetch live news");
       // Fallback to mock news if API fails
       setNews(getMockNews());
     } finally {
