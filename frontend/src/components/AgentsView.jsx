@@ -606,10 +606,50 @@ const AgentsView = () => {
         )}
 
         {/* Input Area */}
-        <div className="p-4 border-t border-white/10">
-          {/* Image preview */}
+        <div className="p-4 border-t border-white/10 bg-black/20">
+          {/* Deep Research Toggle for Business Intel */}
+          {activeAgent === "business" && (
+            <div className="mb-3 flex items-center justify-between p-3 bg-[#FBBC04]/10 border border-[#FBBC04]/30 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-[#FBBC04]" />
+                <span className="text-sm font-medium">Deep Research Mode</span>
+                <span className="text-xs text-white/50">(Multi-agent comprehensive analysis)</span>
+              </div>
+              <button
+                onClick={() => setDeepResearchMode(!deepResearchMode)}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  deepResearchMode ? 'bg-[#FBBC04]' : 'bg-white/20'
+                }`}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                  deepResearchMode ? 'left-7' : 'left-1'
+                }`} />
+              </button>
+            </div>
+          )}
+          
+          {/* Research Progress */}
+          {researchProgress && (
+            <div className="mb-3 p-3 bg-[#667eea]/10 border border-[#667eea]/30 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Loader2 className="w-4 h-4 text-[#667eea] animate-spin" />
+                <span className="text-sm font-medium">{researchProgress.message || "Researching..."}</span>
+              </div>
+              <div className="w-full bg-white/10 rounded-full h-2">
+                <div 
+                  className="bg-[#667eea] h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${((researchProgress.stage + 1) / researchProgress.total) * 100}%` }}
+                />
+              </div>
+              <div className="text-xs text-white/50 mt-1">
+                Stage {researchProgress.stage + 1} of {researchProgress.total}
+              </div>
+            </div>
+          )}
+          
+          {/* Selected Image Preview */}
           {selectedImage && (
-            <div className="mb-2">
+            <div className="mb-3">
               <div className="relative inline-block">
                 <img 
                   src={selectedImage.preview} 
