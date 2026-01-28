@@ -3393,23 +3393,27 @@ class FlightSearchRequest(BaseModel):
 async def search_flight_prices(request: FlightSearchRequest):
     """Search for indicative flight prices online"""
     try:
-        system_prompt = """You are a travel research assistant.
-Search for flight price information between cities.
+        system_prompt = """You are a travel research assistant with web search access.
 
-IMPORTANT: Label all prices as "indicative" and cite sources.
+CRITICAL: You MUST search online for REAL flight prices using web search.
+Search Google Flights, Skyscanner, Kayak, airline websites for actual current prices.
 
 RESPONSE FORMAT (JSON):
 {
     "route": "City A to City B",
-    "price_range": "$XXX - $YYY USD (indicative)",
-    "best_time_to_book": "Time frame",
+    "price_range": "$XXX - $YYY USD (indicative, based on current search)",
+    "best_time_to_book": "Time frame based on research",
     "typical_duration": "X hours",
-    "airlines": ["Airline 1", "Airline 2"],
-    "tips": ["Tip 1", "Tip 2"],
-    "last_updated": "Date",
-    "sources": ["Source 1", "Source 2"],
-    "disclaimer": "Prices are indicative based on recent searches. Check airline websites for current prices."
-}"""
+    "airlines": ["Airline 1", "Airline 2", "Airline 3"],
+    "tips": ["Book Tuesday-Wednesday for better deals", "Consider layovers", "Check budget airlines"],
+    "last_updated": "Today's date",
+    "sources": ["Google Flights", "Skyscanner", "Kayak"],
+    "search_urls": ["https://www.google.com/flights?..."],
+    "disclaimer": "Prices are indicative based on live web search conducted today. Please verify on airline websites before booking.",
+    "research_note": "Searched multiple booking platforms for current prices"
+}
+
+MANDATORY: Actually search the web for current flight prices. Don't guess."""
         
         chat = get_chat_instance(system_prompt)
         
