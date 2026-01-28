@@ -5,13 +5,14 @@ import {
   Circle, Clock, BarChart3, BookOpen, Lightbulb, Sparkles,
   User, Briefcase, Code, Stethoscope, Plane, Building,
   Download, RefreshCw, MessageSquare, Home, ArrowLeft, Trophy,
-  Flame, Star, Mic, MicOff, Image, X, Zap, TrendingUp
+  Flame, Star, Mic, MicOff, Image, X, Zap, TrendingUp, Youtube, ExternalLink
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Progress } from "./ui/progress";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import VideoLearningModal from "./VideoLearningModal";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
