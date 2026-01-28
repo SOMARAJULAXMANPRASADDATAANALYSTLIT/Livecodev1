@@ -3456,11 +3456,17 @@ class LearningResourcesRequest(BaseModel):
 async def research_learning_resources(request: LearningResourcesRequest):
     """Research free online courses, YouTube tutorials, and learning paths"""
     try:
-        system_prompt = f"""You are an expert learning path designer researching online educational resources.
+        system_prompt = f"""You are an expert learning path designer with web search access.
 
-Find FREE, HIGH-QUALITY resources for learning: {request.topic}
+CRITICAL: Use web search to find REAL, CURRENT free learning resources for: {request.topic}
 Level: {request.level}
 Goal: {request.goal or 'Master this topic'}
+
+MANDATORY REQUIREMENTS:
+1. Search YouTube for REAL playlists with actual URLs
+2. Search freeCodeCamp, Coursera, edX for FREE courses with real links
+3. Find official documentation with working URLs
+4. Verify all resources are actually free and accessible
 
 RESPONSE FORMAT (JSON):
 {{
@@ -3474,13 +3480,14 @@ RESPONSE FORMAT (JSON):
                 "topics": ["Topic 1", "Topic 2"],
                 "resources": [
                     {{
-                        "title": "Resource name",
+                        "title": "ACTUAL resource name from web search",
                         "type": "youtube|course|documentation|tutorial|book",
-                        "url": "URL or search term",
+                        "url": "REAL, WORKING URL",
                         "provider": "YouTube|Coursera|freeCodeCamp|Official Docs",
                         "duration": "X hours",
                         "free": true,
-                        "quality_rating": "⭐⭐⭐⭐⭐"
+                        "quality_rating": "⭐⭐⭐⭐⭐",
+                        "verified": true
                     }}
                 ]
             }}
@@ -3488,31 +3495,34 @@ RESPONSE FORMAT (JSON):
     }},
     "youtube_playlists": [
         {{
-            "title": "Playlist name",
-            "channel": "Channel name",
-            "search_query": "Search term to find it",
-            "estimated_duration": "X hours"
+            "title": "ACTUAL playlist name",
+            "channel": "ACTUAL channel name",
+            "url": "REAL YouTube playlist URL",
+            "estimated_duration": "X hours",
+            "subscriber_count": "if available"
         }}
     ],
     "free_courses": [
         {{
-            "title": "Course name",
+            "title": "ACTUAL course name",
             "platform": "Coursera|Udemy|freeCodeCamp|edX",
-            "url_or_search": "URL or how to find it",
-            "level": "beginner|intermediate|advanced"
+            "url": "REAL course URL",
+            "level": "beginner|intermediate|advanced",
+            "rating": "if available"
         }}
     ],
     "official_docs": [
         {{
-            "title": "Documentation",
-            "url": "URL"
+            "title": "ACTUAL documentation",
+            "url": "REAL documentation URL"
         }}
     ],
     "practice_projects": [
         {{
             "title": "Project idea",
             "difficulty": "easy|medium|hard",
-            "skills_practiced": ["Skill 1", "Skill 2"]
+            "skills_practiced": ["Skill 1", "Skill 2"],
+            "tutorial_link": "if available"
         }}
     ],
     "career_path": {{
