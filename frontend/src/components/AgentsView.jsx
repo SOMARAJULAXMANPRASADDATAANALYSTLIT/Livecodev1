@@ -3,7 +3,7 @@ import {
   Code, Stethoscope, Plane, BarChart3, Send, Loader2, 
   Download, Lightbulb, ChevronRight, Building, MapPin,
   Heart, FileText, Globe, Calendar, DollarSign, Users,
-  Activity, Clock, Star, ExternalLink, Map, Mic, MicOff, Image, X
+  Activity, Clock, Star, ExternalLink, Map, Mic, MicOff, Image, X, Zap
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
