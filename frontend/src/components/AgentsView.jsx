@@ -26,6 +26,8 @@ const AgentsView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [specialResult, setSpecialResult] = useState(null);
+  const [deepResearchMode, setDeepResearchMode] = useState(false);
+  const [researchProgress, setResearchProgress] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Voice input state
