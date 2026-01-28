@@ -292,11 +292,24 @@ const ProjectUploadModal = ({ onClose, onProjectLoaded }) => {
                 </div>
               )}
 
-              {/* Start Learning Button */}
-              <Button onClick={handleStartLearning} className="w-full btn-primary gap-2 mt-4">
-                <BookOpen className="w-4 h-4" />
-                Start Learning Journey
-              </Button>
+              {/* Start Learning Buttons */}
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <Button 
+                  onClick={() => setShowTeachingModal(true)} 
+                  className="btn-primary gap-2"
+                >
+                  <GraduationCap className="w-4 h-4" />
+                  Teach Me This Project
+                </Button>
+                <Button 
+                  onClick={handleStartLearning} 
+                  variant="outline" 
+                  className="gap-2"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Start Coding
+                </Button>
+              </div>
             </div>
           ) : null}
         </div>
