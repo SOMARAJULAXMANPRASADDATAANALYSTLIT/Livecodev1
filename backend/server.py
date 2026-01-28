@@ -3535,7 +3535,19 @@ RESPONSE FORMAT (JSON):
 Research thoroughly and provide real, findable resources. Prioritize FREE and high-quality content."""
         
         chat = get_chat_instance(system_prompt)
-        user_msg = UserMessage(text=f"Research comprehensive learning resources for: {request.topic} at {request.level} level")
+        user_msg = UserMessage(text=f"""Search the web NOW for learning resources:
+
+Topic: {request.topic}
+Level: {request.level}
+Goal: {request.goal or 'Master this topic'}
+
+Find and return:
+1. Real YouTube playlists with actual URLs
+2. Free courses on Coursera, edX, freeCodeCamp with working links
+3. Official documentation URLs
+4. Tutorial websites and blogs
+
+Use web search to get CURRENT, REAL resources with working URLs.""")
         response = await chat.send_message(user_msg)
         
         data = safe_parse_json(response, {
