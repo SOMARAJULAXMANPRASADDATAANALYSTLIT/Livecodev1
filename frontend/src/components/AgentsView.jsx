@@ -719,21 +719,123 @@ const AgentsView = () => {
   );
 };
 
-// Message Bubble Component
+// Message Bubble Component with Enhanced Formatting
 const MessageBubble = ({ message, agentColor }) => {
   const isUser = message.role === "user";
   
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-6`}>
       <div 
-        className={`max-w-[80%] p-4 rounded-2xl ${
+        className={`max-w-[85%] p-6 rounded-2xl ${
           isUser 
             ? 'bg-[#667eea] text-white' 
-            : 'glass-light'
+            : 'glass-light border border-white/10'
         }`}
       >
-        <div className="prose prose-invert prose-sm max-w-none">
-          <ReactMarkdown>{message.content}</ReactMarkdown>
+        <div className="prose prose-invert prose-sm max-w-none agent-response">
+          <ReactMarkdown
+            components={{
+              // Headings with icons and spacing
+              h1: ({ children }) => (
+                <h1 className="text-3xl font-bold mb-6 mt-8 pb-3 border-b border-white/20 flex items-center gap-3">
+                  <span className="text-[#667eea]">📘</span>
+                  {children}
+                </h1>
+              ),
+              h2: ({ children }) => (
+                <h2 className="text-2xl font-bold mb-4 mt-8 text-[#667eea] flex items-center gap-2">
+                  <span>▸</span>
+                  {children}
+                </h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="text-xl font-semibold mb-3 mt-6 text-white/90 flex items-center gap-2">
+                  <span className="text-[#34A853]">●</span>
+                  {children}
+                </h3>
+              ),
+              // Paragraphs with spacing
+              p: ({ children }) => (
+                <p className="text-white/80 leading-relaxed mb-4 text-base">{children}</p>
+              ),
+              // Enhanced lists
+              ul: ({ children }) => (
+                <ul className="space-y-3 my-6 pl-6">{children}</ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="space-y-3 my-6 pl-6">{children}</ol>
+              ),
+              li: ({ children }) => (
+                <li className="text-white/80 leading-relaxed pl-2">
+                  <span className="inline-block w-2 h-2 bg-[#667eea] rounded-full mr-3 -ml-6"></span>
+                  {children}
+                </li>
+              ),
+              // Code blocks with better styling
+              code: ({ inline, children, className }) => {
+                if (inline) {
+                  return (
+                    <code className="px-2 py-1 bg-[#667eea]/20 text-[#667eea] rounded font-mono text-sm border border-[#667eea]/30">
+                      {children}
+                    </code>
+                  );
+                }
+                return (
+                  <div className="my-6">
+                    <pre className="bg-black/40 rounded-xl p-6 overflow-x-auto border border-white/10">
+                      <code className="text-sm font-mono text-green-400 leading-relaxed">
+                        {children}
+                      </code>
+                    </pre>
+                  </div>
+                );
+              },
+              // Tables with proper styling
+              table: ({ children }) => (
+                <div className="my-6 overflow-x-auto">
+                  <table className="w-full border-collapse bg-black/20 rounded-lg overflow-hidden">
+                    {children}
+                  </table>
+                </div>
+              ),
+              thead: ({ children }) => (
+                <thead className="bg-[#667eea]/20">{children}</thead>
+              ),
+              th: ({ children }) => (
+                <th className="px-4 py-3 text-left font-semibold text-white border-b border-white/10">
+                  {children}
+                </th>
+              ),
+              td: ({ children }) => (
+                <td className="px-4 py-3 text-white/80 border-b border-white/5">
+                  {children}
+                </td>
+              ),
+              // Blockquotes as info boxes
+              blockquote: ({ children }) => (
+                <div className="my-6 p-4 bg-[#667eea]/10 border-l-4 border-[#667eea] rounded-r-lg">
+                  <div className="flex items-start gap-3">
+                    <Lightbulb className="w-5 h-5 text-[#FBBC04] flex-shrink-0 mt-1" />
+                    <div className="text-white/90">{children}</div>
+                  </div>
+                </div>
+              ),
+              // Strong text
+              strong: ({ children }) => (
+                <strong className="font-bold text-white">{children}</strong>
+              ),
+              // Emphasis
+              em: ({ children }) => (
+                <em className="italic text-[#667eea]">{children}</em>
+              ),
+              // Horizontal rules as section dividers
+              hr: () => (
+                <hr className="my-8 border-t-2 border-white/10" />
+              ),
+            }}
+          >
+            {message.content}
+          </ReactMarkdown>
         </div>
       </div>
     </div>
