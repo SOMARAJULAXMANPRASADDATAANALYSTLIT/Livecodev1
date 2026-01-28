@@ -107,8 +107,20 @@ const CodeLearningView = () => {
           lines.push(i);
         }
         setSelectedLines(lines);
+        
+        // Show help popup near the selection
+        const position = editor.getPosition();
+        const coords = editor.getScrolledVisiblePosition(position);
+        if (coords) {
+          setPopupPosition({ 
+            x: coords.left + coords.width + 10, 
+            y: coords.top 
+          });
+          setShowCodeHelpPopup(true);
+        }
       } else {
         setSelectedLines([]);
+        setShowCodeHelpPopup(false);
       }
     });
   };
