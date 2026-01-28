@@ -3,7 +3,7 @@ import Editor from "@monaco-editor/react";
 import { 
   Play, Bug, Sparkles, ChevronRight, Wand2, Split, Copy, Check, 
   HelpCircle, Lightbulb, MessageSquare, Terminal, Upload, BookOpen,
-  Eye, EyeOff, ChevronDown, Zap, AlertTriangle
+  Eye, EyeOff, ChevronDown, Zap, AlertTriangle, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
