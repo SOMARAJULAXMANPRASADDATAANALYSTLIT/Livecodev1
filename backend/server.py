@@ -3052,6 +3052,7 @@ Suggestions for:
 Be thorough, encouraging, and educational. Act as a senior engineer mentor."""
         
         # Build context
+        newline = '\n'
         context = f"""
 PROJECT NAME: {project.get('name', 'Unknown')}
 FRAMEWORKS: {', '.join(project.get('frameworks', ['None detected']))}
@@ -3064,7 +3065,7 @@ README CONTENT:
 {readme_content if readme_content else 'No README found'}
 
 KEY FILES SAMPLE:
-{chr(10).join([f"File: {f['path']}\n{f['content'][:500]}..." for f in key_files[:2]])}
+{newline.join([f"File: {f['path']}{newline}{f['content'][:500]}..." for f in key_files[:2]])}
 """
         
         chat = get_chat_instance(system_prompt)
