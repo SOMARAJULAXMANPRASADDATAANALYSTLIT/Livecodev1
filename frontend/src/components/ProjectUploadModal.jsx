@@ -123,7 +123,8 @@ const ProjectUploadModal = ({ onClose, onProjectLoaded }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 animate-fadeIn">
+    <>
+      <div className="fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4 animate-fadeIn">
       <div className="teaching-card w-full max-w-2xl max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl border border-white/10 animate-slideUp bg-[#1a1a2e]">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10">
