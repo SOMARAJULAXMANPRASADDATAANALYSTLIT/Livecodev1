@@ -14,6 +14,7 @@ const ProjectUploadModal = ({ onClose, onProjectLoaded }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [projectData, setProjectData] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
+  const [showTeachingModal, setShowTeachingModal] = useState(false);
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
