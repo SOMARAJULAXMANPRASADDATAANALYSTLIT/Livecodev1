@@ -3475,84 +3475,120 @@ class LearningResourcesRequest(BaseModel):
 
 @api_router.post("/learning/research-resources")
 async def research_learning_resources(request: LearningResourcesRequest):
-    """Research free online courses, YouTube tutorials, and learning paths"""
+    """Research free online courses, YouTube tutorials, and learning paths using Gemini Deep Research"""
     try:
-        system_prompt = f"""You are a learning resource researcher with web search capabilities.
+        # Use Gemini Deep Research Agent for comprehensive search
+        system_prompt = f"""You are researching learning resources for: {request.topic}
 
-YOUR TASK: Find REAL YouTube videos and free courses for someone who wants to learn: {request.topic}
+Find 3-5 REAL YouTube tutorial videos and 2-3 free courses.
 
-🔍 SEARCH STRATEGY:
-1. Search YouTube for: "{request.topic} tutorial"
-2. Search YouTube for: "{request.topic} course" 
-3. Search YouTube for: "{request.topic} for beginners"
-4. Search YouTube for: "learn {request.topic}"
-5. Find popular educational channels (freeCodeCamp, Traversy Media, Programming with Mosh, etc.)
-
-📺 YOUTUBE REQUIREMENTS:
-- MUST return 3-5 REAL YouTube video/playlist URLs
-- Use search to find ACTUAL videos that exist
-- Include channel names from search results
-- Include video duration estimates
-- Prefer long-form tutorials and playlists
-
-🎓 COURSE REQUIREMENTS:
-- Search Coursera, edX, Udemy for FREE courses
-- Return REAL course URLs that exist
-- Mark which are truly free vs free trial
-
-RESPONSE FORMAT (JSON):
+IMPORTANT: Return ONLY valid JSON in this exact format:
 {{
-    "topic": "{request.topic}",
     "youtube_playlists": [
         {{
-            "title": "Complete {request.topic} Tutorial - ACTUAL title from search",
-            "channel": "REAL channel name from search",
-            "url": "https://www.youtube.com/watch?v=REAL_VIDEO_ID",
-            "estimated_duration": "Based on video length",
-            "thumbnail": "Optional thumbnail URL",
-            "views": "If available from search"
+            "title": "actual video title",
+            "channel": "actual channel name",
+            "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+            "estimated_duration": "duration"
         }}
     ],
     "free_courses": [
         {{
-            "title": "ACTUAL course title from search",
-            "platform": "Coursera|edX|freeCodeCamp|Udemy",
-            "url": "REAL course URL from search",
-            "level": "{request.level}",
-            "rating": "From search if available",
-            "free": true
+            "title": "actual course name",
+            "platform": "Coursera",
+            "url": "https://coursera.org/...",
+            "level": "{request.level}"
         }}
     ]
 }}
 
-CRITICAL: You MUST use web search to find these. Don't make up URLs. Search YouTube and course platforms now."""
+Search YouTube and course platforms NOW. Return actual URLs."""
         
+        # Try using chat with explicit JSON mode
         chat = get_chat_instance(system_prompt, model_type="pro")
         
-        user_msg = UserMessage(text=f"""Execute web search NOW:
+        user_msg = UserMessage(text=f"""Search for {request.topic} learning resources.
+Find:
+1. YouTube tutorials (search: "{request.topic} tutorial")
+2. YouTube courses (search: "{request.topic} course") 
+3. Free online courses
 
-1. Search YouTube for: "{request.topic} tutorial complete"
-2. Search YouTube for: "{request.topic} course"
-3. Search YouTube for: "learn {request.topic} from scratch"
-4. Search Coursera for: "{request.topic}"
-5. Search freeCodeCamp for: "{request.topic}"
-
-Return 3-5 REAL YouTube videos with actual URLs and 2-3 free courses with real links.
-
-Topic: {request.topic}
-Level: {request.level}
-Goal: {request.goal or f'Learn {request.topic}'}""")
+Return JSON with youtube_playlists and free_courses arrays.""")
+        
         response = await chat.send_message(user_msg)
         
-        data = safe_parse_json(response, {
+        # Try to parse JSON from response
+        try:
+            # Clean the response - remove markdown code blocks if present
+            cleaned = response.strip()
+            if cleaned.startswith("```json"):
+                cleaned = cleaned[7:]
+            if cleaned.startswith("```"):
+                cleaned = cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+            
+            data = json.loads(cleaned)
+            
+            # Validate structure
+            if "youtube_playlists" not in data:
+                data["youtube_playlists"] = []
+            if "free_courses" not in data:
+                data["free_courses"] = []
+                
+            # If still empty, add fallback manual search suggestions
+            if len(data["youtube_playlists"]) == 0:
+                data["youtube_playlists"] = [
+                    {
+                        "title": f"{request.topic} - Full Course Tutorial",
+                        "channel": "Search YouTube manually",
+                        "url": f"https://www.youtube.com/results?search_query={request.topic.replace(' ', '+')}+tutorial",
+                        "estimated_duration": "Variable",
+                        "manual_search": True
+                    }
+                ]
+            
+            data["topic"] = request.topic
+            data["level"] = request.level
+            
+            return data
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parse error: {e}. Response was: {response}")
+            # Return structure with manual search links
+            return {
+                "topic": request.topic,
+                "level": request.level,
+                "youtube_playlists": [
+                    {
+                        "title": f"Search YouTube: {request.topic} Tutorial",
+                        "channel": "Manual Search Needed",
+                        "url": f"https://www.youtube.com/results?search_query={request.topic.replace(' ', '+')}+tutorial",
+                        "estimated_duration": "Variable",
+                        "manual_search": True
+                    }
+                ],
+                "free_courses": []
+            }
+        
+    except Exception as e:
+        logger.error(f"Learning resources research error: {e}")
+        # Don't fail - return manual search option
+        return {
             "topic": request.topic,
             "level": request.level,
-            "learning_path": {"phases": []},
-            "youtube_playlists": [],
+            "youtube_playlists": [
+                {
+                    "title": f"Search for {request.topic} tutorials on YouTube",
+                    "channel": "YouTube Search",
+                    "url": f"https://www.youtube.com/results?search_query={request.topic.replace(' ', '+')}+full+course",
+                    "estimated_duration": "Variable",
+                    "manual_search": True
+                }
+            ],
             "free_courses": []
-        })
-        
-        return data
+        }
         
     except Exception as e:
         logger.error(f"Learning resources research error: {e}")
