@@ -112,11 +112,25 @@ const ProjectUploadModal = ({ onClose, onProjectLoaded }) => {
     }
   };
 
-  const handleStartLearning = () => {
-    if (analysisResult && onProjectLoaded) {
+  const handleStartCoding = () => {
+    if (projectData && onProjectLoaded) {
+      // Pass project data for coding mode
       onProjectLoaded({
         ...projectData,
-        analysis: analysisResult
+        analysis: analysisResult,
+        mode: 'coding' // Indicate this is coding mode, not teaching
+      });
+    }
+    onClose();
+  };
+
+  const handleStartLearning = () => {
+    if (analysisResult && onProjectLoaded) {
+      // Pass project data for learning journey mode
+      onProjectLoaded({
+        ...projectData,
+        analysis: analysisResult,
+        mode: 'learning' // Indicate this is learning mode
       });
     }
     onClose();
