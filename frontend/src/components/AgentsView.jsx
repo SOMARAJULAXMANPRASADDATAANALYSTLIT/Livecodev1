@@ -263,6 +263,58 @@ const AgentsView = () => {
 
   const handleTravelPlan = async (message) => {
     try {
+      // Check if asking for flight prices
+      const flightPriceQuery = /(?:flight|flights?|plane|airfare|air\s*fare).*(?:price|cost|how much)/i.test(message) ||
+                               /how much.*(?:flight|fly)/i.test(message);
+      
+      if (flightPriceQuery) {
+        // Extract origin and destination
+        const fromMatch = message.match(/from\s+([A-Za-z\s]+?)(?:\s+to|\s+and|,|$)/i);
+        const toMatch = message.match(/to\s+([A-Za-z\s,]+?)(?:\s+from|\s+on|$)/i);
+        
+        const origin = fromMatch ? fromMatch[1].trim() : "New York";
+        const destination = toMatch ? toMatch[1].trim() : "London";
+        
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: `✈️ Searching for flight prices from **${origin}** to **${destination}**...`,
+          agent: activeAgent 
+        }]);
+        
+        const response = await fetch(`${BACKEND_URL}/api/agent/travel/search-flights`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            origin, 
+            destination
+          })
+        });
+        
+        if (!response.ok) throw new Error("Flight search failed");
+        
+        const data = await response.json();
+        
+        const flightInfo = `## ✈️ Flight Price Information\n\n` +
+          `**Route:** ${data.route}\n\n` +
+          `**💰 Indicative Price Range:** ${data.price_range}\n\n` +
+          `**⏱️ Typical Duration:** ${data.typical_duration || 'Varies by route'}\n\n` +
+          `**🛫 Airlines:** ${(data.airlines || []).join(', ') || 'Multiple carriers available'}\n\n` +
+          `**📅 Best Time to Book:** ${data.best_time_to_book || '2-3 months in advance'}\n\n` +
+          `### 💡 Tips\n` +
+          (data.tips || []).map(tip => `• ${tip}`).join('\n') + '\n\n' +
+          `**⚠️ Important:** ${data.disclaimer}\n\n` +
+          `**Sources:** ${(data.sources || ['Real-time web search']).join(', ')}`;
+        
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: flightInfo,
+          agent: activeAgent 
+        }]);
+        
+        return;
+      }
+      
+      // Regular trip planning
       // Extract destination from message
       const destinationMatch = message.match(/(?:to|in|for)\s+([A-Za-z\s,]+?)(?:\s+for|\s+in|\.|$)/i);
       const destination = destinationMatch ? destinationMatch[1].trim() : "popular destination";
