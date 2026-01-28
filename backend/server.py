@@ -3301,25 +3301,34 @@ async def search_live_news(category: str = "ai", query: Optional[str] = None):
         # Use web-grounded search for real-time news
         search_query = query or f"latest {category} technology news 2025"
         
-        system_prompt = f"""You are a tech news curator.
-Search and summarize the latest {category} news from reliable sources.
+        system_prompt = f"""You are a tech news curator with web search access.
+Search for REAL, CURRENT news articles published in the last 7 days for: {category}
+
+CRITICAL REQUIREMENTS:
+1. Use web search to find ACTUAL published articles
+2. Return REAL URLs that actually exist (not fabricated)
+3. Verify sources are reputable: TechCrunch, The Verge, Wired, ArsTechnica, Bloomberg, Reuters
+4. Extract actual titles and summaries from the articles
+5. Include publication date if available
 
 RESPONSE FORMAT (JSON):
 {{
     "articles": [
         {{
-            "title": "Article title",
-            "summary": "2-3 sentence summary",
-            "source": "Source name",
-            "url": "Real URL if available, or source homepage",
+            "title": "ACTUAL article title from website",
+            "summary": "2-3 sentence summary of actual content",
+            "source": "Source name (e.g., TechCrunch, The Verge)",
+            "url": "REAL, VALID URL - must be accessible",
             "category": "{category}",
-            "publishedAt": "ISO date",
-            "key_points": ["Point 1", "Point 2"]
+            "publishedAt": "ISO date or 'Recent'",
+            "key_points": ["Key point 1", "Key point 2"],
+            "verified": true
         }}
     ]
 }}
 
-Find 6-8 recent articles from reputable sources like TechCrunch, The Verge, ArsTechnica, etc."""
+IMPORTANT: Only include articles with REAL, working URLs. If you can't verify a URL, don't include it.
+Find 6-8 recent articles."""
         
         chat = get_chat_instance(system_prompt)
         user_msg = UserMessage(text=f"Find latest news: {search_query}")
