@@ -634,6 +634,37 @@ const CodeLearningView = () => {
                   glyphMargin: true,
                 }}
               />
+              
+              {/* Inline Code Help Popup */}
+              {showCodeHelpPopup && selectedLines.length > 0 && (
+                <div 
+                  className="absolute z-50 animate-slideUp"
+                  style={{ 
+                    left: `${popupPosition.x}px`, 
+                    top: `${popupPosition.y}px`,
+                    pointerEvents: 'auto'
+                  }}
+                >
+                  <div className="bg-gradient-to-br from-[#667eea]/95 to-[#764ba2]/95 backdrop-blur-sm rounded-lg shadow-2xl p-3 flex items-center gap-2 border border-white/20">
+                    <HelpCircle className="w-4 h-4 text-white" />
+                    <button
+                      onClick={() => {
+                        setShowLineMentoring(true);
+                        setShowCodeHelpPopup(false);
+                      }}
+                      className="text-sm font-medium text-white hover:text-yellow-300 transition-colors"
+                    >
+                      Need help with this line?
+                    </button>
+                    <button
+                      onClick={() => setShowCodeHelpPopup(false)}
+                      className="ml-2 text-white/60 hover:text-white transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
