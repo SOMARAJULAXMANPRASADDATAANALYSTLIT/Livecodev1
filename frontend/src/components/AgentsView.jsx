@@ -867,7 +867,6 @@ const SpecialResultCard = ({ result, onDownload }) => {
   
   if (result.type === "visual") {
     const { data } = result;
-    const [isZoomed, setIsZoomed] = useState(false);
     
     const downloadImage = () => {
       if (data.image_base64) {
