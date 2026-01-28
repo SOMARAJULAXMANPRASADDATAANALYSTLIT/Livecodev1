@@ -320,27 +320,68 @@ const AgentsView = () => {
         return;
       }
       
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: `🔍 Analyzing **${url}**... This may take a moment as I research the company.`,
-        agent: activeAgent 
-      }]);
-      
-      const response = await fetch(`${BACKEND_URL}/api/agent/business/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company_url: url, analysis_type: "full" })
-      });
-      
-      if (!response.ok) throw new Error("Failed to analyze company");
-      
-      const data = await response.json();
-      setSpecialResult({ type: "business", data });
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: `Analysis complete for **${data.company_name || url}**! 📊\n\nI've generated a comprehensive 8-sheet report. You can view each section below or download the full HTML dashboard.`,
-        agent: activeAgent 
-      }]);
+      // Check if deep research mode is enabled
+      if (deepResearchMode) {
+        // Multi-stage deep research
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: `🔬 **Deep Research Mode Activated**\n\nAnalyzing **${url}** comprehensively...`,
+          agent: activeAgent 
+        }]);
+        
+        setResearchProgress({ stage: 0, total: 5 });
+        
+        const response = await fetch(`${BACKEND_URL}/api/agent/business/deep-research`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            company_url: url,
+            depth: "comprehensive"
+          })
+        });
+        
+        if (!response.ok) throw new Error("Deep research failed");
+        
+        const data = await response.json();
+        
+        // Show research stages
+        for (let i = 0; i < data.stages.length; i++) {
+          setResearchProgress({ stage: i, total: data.stages.length, message: data.stages[i].message });
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        setResearchProgress(null);
+        setSpecialResult({ type: "business_deep", data });
+        
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: `✅ **Deep Research Complete!**\n\n**${data.company_name}** - Comprehensive analysis ready!\n\n📊 Generated 8-sheet detailed report\n📈 Analyzed competitors, products, pricing, and strategy\n📄 Professional HTML dashboard available\n\nView the detailed analysis below or download reports.`,
+          agent: activeAgent 
+        }]);
+      } else {
+        // Standard analysis
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: `🔍 Analyzing **${url}**... This may take a moment as I research the company.`,
+          agent: activeAgent 
+        }]);
+        
+        const response = await fetch(`${BACKEND_URL}/api/agent/business/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company_url: url, analysis_type: "full" })
+        });
+        
+        if (!response.ok) throw new Error("Failed to analyze company");
+        
+        const data = await response.json();
+        setSpecialResult({ type: "business", data });
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: `Analysis complete for **${data.company_name || url}**! 📊\n\nI've generated a comprehensive 8-sheet report. You can view each section below or download the full HTML dashboard.`,
+          agent: activeAgent 
+        }]);
+      }
     } catch (error) {
       throw error;
     }
