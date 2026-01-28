@@ -3555,7 +3555,7 @@ RESPONSE FORMAT (JSON):
 
 Research thoroughly and provide real, findable resources. Prioritize FREE and high-quality content."""
         
-        chat = get_chat_instance(system_prompt)
+        chat = get_chat_instance(system_prompt, model_type="pro")  # Use Pro model for deep learning resource research
         user_msg = UserMessage(text=f"""Search the web NOW for learning resources:
 
 Topic: {request.topic}
