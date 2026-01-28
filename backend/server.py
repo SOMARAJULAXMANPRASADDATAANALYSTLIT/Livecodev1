@@ -3203,7 +3203,7 @@ Respond with JSON:
     "key_facts": ["Fact 1", "Fact 2"]
 }"""
         
-        chat1 = get_chat_instance(system_prompt_stage1)
+        chat1 = get_chat_instance(system_prompt_stage1, model_type="pro")  # Use Gemini 3 Pro for deep research
         user_msg1 = UserMessage(text=f"Research this company website: {request.company_url}")
         response1 = await chat1.send_message(user_msg1)
         stage1_data = safe_parse_json(response1, {})
