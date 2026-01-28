@@ -13,13 +13,21 @@ const Editor = lazy(() => import("@monaco-editor/react"));
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Recursive File Tree Component with drill-down
-function FileTree({ node, onSelect, selected, level = 0 }) {
+const FileTree = React.memo(function FileTree({ node, onSelect, selected, level = 0 }) {
   const [expanded, setExpanded] = useState(level < 2);
   
   if (!node) return null;
   
   const isFolder = node.type === 'directory' || node.children?.length > 0;
   const isSelected = selected === node.path;
+  
+  const renderChildren = () => {
+    if (!isFolder || !expanded || !node.children) return null;
+    
+    return node.children.map((child, i) => (
+      <FileTree key={child.path || i} node={child} onSelect={onSelect} selected={selected} level={level + 1} />
+    ));
+  };
   
   return (
     <div>
@@ -44,12 +52,10 @@ function FileTree({ node, onSelect, selected, level = 0 }) {
         )}
         <span className="text-sm truncate">{node.name}</span>
       </div>
-      {isFolder && expanded && node.children?.map((child, i) => (
-        <FileTree key={child.path || i} node={child} onSelect={onSelect} selected={selected} level={level + 1} />
-      ))}
+      {renderChildren()}
     </div>
   );
-}
+});
 
 // Run Commands Panel
 function RunCommandsPanel({ commands, onRunCommand }) {
