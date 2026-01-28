@@ -839,7 +839,7 @@ const OnboardingPhase = ({ step, setStep, data, setData, onComplete, isLoading }
 };
 
 // Roadmap Phase Component
-const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTopic, onViewDashboard, onGoHome, xp, level, streak, badges }) => {
+const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTopic, onViewDashboard, onGoHome, xp, level, streak, badges, onlineResources, onPlayVideo }) => {
   const [expandedNodes, setExpandedNodes] = useState(new Set(["root"]));
 
   const toggleNode = (nodeId) => {
