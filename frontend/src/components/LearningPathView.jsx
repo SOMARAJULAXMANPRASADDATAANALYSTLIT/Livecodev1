@@ -378,6 +378,11 @@ const LearningPathView = () => {
       level={level}
       streak={streak}
       badges={badges}
+      onlineResources={onlineResources}
+      onPlayVideo={(video) => {
+        setCurrentVideo(video);
+        setShowVideoModal(true);
+      }}
     />;
   }
 
