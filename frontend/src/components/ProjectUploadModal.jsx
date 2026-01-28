@@ -322,7 +322,17 @@ const ProjectUploadModal = ({ onClose, onProjectLoaded }) => {
           </Button>
         </div>
       </div>
-    </div>
+      
+      {/* Teaching Modal */}
+      {showTeachingModal && projectData && analysisResult && (
+        <ProjectTeachingModal
+          projectId={projectData.project_id}
+          projectData={projectData}
+          onClose={() => setShowTeachingModal(false)}
+          skillLevel={skillLevel}
+        />
+      )}
+    </>
   );
 };
 
