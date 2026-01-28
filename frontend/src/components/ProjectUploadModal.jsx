@@ -317,11 +317,11 @@ const ProjectUploadModal = ({ onClose, onProjectLoaded }) => {
                   Teach Me This Project
                 </Button>
                 <Button 
-                  onClick={handleStartLearning} 
+                  onClick={handleStartCoding} 
                   variant="outline" 
-                  className="gap-2"
+                  className="gap-2 border-[#667eea] text-[#667eea] hover:bg-[#667eea]/10"
                 >
-                  <BookOpen className="w-4 h-4" />
+                  <Cpu className="w-4 h-4" />
                   Start Coding
                 </Button>
               </div>
