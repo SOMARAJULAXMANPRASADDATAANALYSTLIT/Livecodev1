@@ -580,20 +580,19 @@ const LearningPathView = () => {
           </div>
         </div>
       </div>
-    </div>
-    
-    {/* Video Learning Modal */}
-    {showVideoModal && currentVideo && (
-      <VideoLearningModal
-        videoUrl={currentVideo.url}
-        videoTitle={currentVideo.title}
-        onClose={() => {
-          setShowVideoModal(false);
-          setCurrentVideo(null);
-        }}
-        skillLevel={userProfile?.experience || "intermediate"}
-      />
-    )}
+      
+      {/* Video Learning Modal */}
+      {showVideoModal && currentVideo && (
+        <VideoLearningModal
+          videoUrl={currentVideo.url}
+          videoTitle={currentVideo.title}
+          onClose={() => {
+            setShowVideoModal(false);
+            setCurrentVideo(null);
+          }}
+          skillLevel={userProfile?.experience || "intermediate"}
+        />
+      )}
     </div>
   );
 };
