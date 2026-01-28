@@ -775,7 +775,27 @@ const CodeLearningView = () => {
           onClose={() => setShowProjectUpload(false)}
           onProjectLoaded={(projectData) => {
             setShowProjectUpload(false);
-            setShowLearningJourney(true);
+            
+            // If there's a project with entry points, load the first file
+            if (projectData && projectData.entry_points && projectData.entry_points.length > 0) {
+              const entryFile = projectData.entry_points[0];
+              const entryPath = typeof entryFile === 'string' ? entryFile : entryFile.file;
+              
+              // Fetch and load the entry file content
+              fetch(`${BACKEND_URL}/api/project/${projectData.project_id}/file?path=${encodeURIComponent(entryPath)}`)
+                .then(res => res.json())
+                .then(data => {
+                  setCode(data.content || '// File loaded - start coding!');
+                  setLanguage(data.language || 'javascript');
+                  toast.success(`Loaded: ${entryPath} - Start coding!`);
+                })
+                .catch(() => {
+                  toast.error('Failed to load entry file');
+                });
+            } else {
+              // Fallback: just show learning journey
+              setShowLearningJourney(true);
+            }
           }}
         />
       )}
