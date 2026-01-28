@@ -3417,13 +3417,19 @@ MANDATORY: Actually search the web for current flight prices. Don't guess."""
         
         chat = get_chat_instance(system_prompt)
         
-        search_text = f"""Find indicative flight prices:
+        search_text = f"""Search the web NOW for flight prices:
 From: {request.origin}
 To: {request.destination}
-{f'Departure: {request.departure_date}' if request.departure_date else ''}
-{f'Return: {request.return_date}' if request.return_date else ''}
+{f'Departure: {request.departure_date}' if request.departure_date else 'Flexible dates'}
+{f'Return: {request.return_date}' if request.return_date else 'One-way or flexible'}
 
-Search for recent price ranges and booking tips."""
+Use web search to find:
+1. Current prices on Google Flights
+2. Price comparison on Skyscanner  
+3. Airline direct prices
+4. Budget airline options
+
+Provide REAL price ranges found through live search."""
         
         user_msg = UserMessage(text=search_text)
         response = await chat.send_message(user_msg)
