@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from "react";
-import { X, Upload, Loader2, FolderOpen, FileCode, CheckCircle, Bug, Lightbulb, BookOpen, Cpu } from "lucide-react";
+import { X, Upload, Loader2, FolderOpen, FileCode, CheckCircle, Bug, Lightbulb, BookOpen, Cpu, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useMentor } from "@/contexts/MentorContext";
+import ProjectTeachingModal from "./ProjectTeachingModal";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
