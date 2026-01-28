@@ -3477,98 +3477,71 @@ class LearningResourcesRequest(BaseModel):
 async def research_learning_resources(request: LearningResourcesRequest):
     """Research free online courses, YouTube tutorials, and learning paths"""
     try:
-        system_prompt = f"""You are an expert learning path designer with web search access.
+        system_prompt = f"""You are a learning resource researcher with web search capabilities.
 
-CRITICAL: Use web search to find REAL, CURRENT free learning resources for: {request.topic}
-Level: {request.level}
-Goal: {request.goal or 'Master this topic'}
+YOUR TASK: Find REAL YouTube videos and free courses for someone who wants to learn: {request.topic}
 
-MANDATORY REQUIREMENTS:
-1. Search YouTube for REAL playlists with actual URLs
-2. Search freeCodeCamp, Coursera, edX for FREE courses with real links
-3. Find official documentation with working URLs
-4. Verify all resources are actually free and accessible
+🔍 SEARCH STRATEGY:
+1. Search YouTube for: "{request.topic} tutorial"
+2. Search YouTube for: "{request.topic} course" 
+3. Search YouTube for: "{request.topic} for beginners"
+4. Search YouTube for: "learn {request.topic}"
+5. Find popular educational channels (freeCodeCamp, Traversy Media, Programming with Mosh, etc.)
+
+📺 YOUTUBE REQUIREMENTS:
+- MUST return 3-5 REAL YouTube video/playlist URLs
+- Use search to find ACTUAL videos that exist
+- Include channel names from search results
+- Include video duration estimates
+- Prefer long-form tutorials and playlists
+
+🎓 COURSE REQUIREMENTS:
+- Search Coursera, edX, Udemy for FREE courses
+- Return REAL course URLs that exist
+- Mark which are truly free vs free trial
 
 RESPONSE FORMAT (JSON):
 {{
     "topic": "{request.topic}",
-    "level": "{request.level}",
-    "learning_path": {{
-        "phases": [
-            {{
-                "phase_name": "Foundation",
-                "duration": "2-4 weeks",
-                "topics": ["Topic 1", "Topic 2"],
-                "resources": [
-                    {{
-                        "title": "ACTUAL resource name from web search",
-                        "type": "youtube|course|documentation|tutorial|book",
-                        "url": "REAL, WORKING URL",
-                        "provider": "YouTube|Coursera|freeCodeCamp|Official Docs",
-                        "duration": "X hours",
-                        "free": true,
-                        "quality_rating": "⭐⭐⭐⭐⭐",
-                        "verified": true
-                    }}
-                ]
-            }}
-        ]
-    }},
     "youtube_playlists": [
         {{
-            "title": "ACTUAL playlist name",
-            "channel": "ACTUAL channel name",
-            "url": "REAL YouTube playlist URL",
-            "estimated_duration": "X hours",
-            "subscriber_count": "if available"
+            "title": "Complete {request.topic} Tutorial - ACTUAL title from search",
+            "channel": "REAL channel name from search",
+            "url": "https://www.youtube.com/watch?v=REAL_VIDEO_ID",
+            "estimated_duration": "Based on video length",
+            "thumbnail": "Optional thumbnail URL",
+            "views": "If available from search"
         }}
     ],
     "free_courses": [
         {{
-            "title": "ACTUAL course name",
-            "platform": "Coursera|Udemy|freeCodeCamp|edX",
-            "url": "REAL course URL",
-            "level": "beginner|intermediate|advanced",
-            "rating": "if available"
+            "title": "ACTUAL course title from search",
+            "platform": "Coursera|edX|freeCodeCamp|Udemy",
+            "url": "REAL course URL from search",
+            "level": "{request.level}",
+            "rating": "From search if available",
+            "free": true
         }}
-    ],
-    "official_docs": [
-        {{
-            "title": "ACTUAL documentation",
-            "url": "REAL documentation URL"
-        }}
-    ],
-    "practice_projects": [
-        {{
-            "title": "Project idea",
-            "difficulty": "easy|medium|hard",
-            "skills_practiced": ["Skill 1", "Skill 2"],
-            "tutorial_link": "if available"
-        }}
-    ],
-    "career_path": {{
-        "typical_timeline": "X months",
-        "milestones": ["Milestone 1", "Milestone 2"],
-        "job_roles": ["Role 1", "Role 2"]
-    }}
+    ]
 }}
 
-Research thoroughly and provide real, findable resources. Prioritize FREE and high-quality content."""
+CRITICAL: You MUST use web search to find these. Don't make up URLs. Search YouTube and course platforms now."""
         
-        chat = get_chat_instance(system_prompt, model_type="pro")  # Use Pro model for deep learning resource research
-        user_msg = UserMessage(text=f"""Search the web NOW for learning resources:
+        chat = get_chat_instance(system_prompt, model_type="pro")
+        
+        user_msg = UserMessage(text=f"""Execute web search NOW:
+
+1. Search YouTube for: "{request.topic} tutorial complete"
+2. Search YouTube for: "{request.topic} course"
+3. Search YouTube for: "learn {request.topic} from scratch"
+4. Search Coursera for: "{request.topic}"
+5. Search freeCodeCamp for: "{request.topic}"
+
+Return 3-5 REAL YouTube videos with actual URLs and 2-3 free courses with real links.
 
 Topic: {request.topic}
 Level: {request.level}
-Goal: {request.goal or 'Master this topic'}
-
-Find and return:
-1. Real YouTube playlists with actual URLs
-2. Free courses on Coursera, edX, freeCodeCamp with working links
-3. Official documentation URLs
-4. Tutorial websites and blogs
-
-Use web search to get CURRENT, REAL resources with working URLs.""")
+Goal: {request.goal or f'Learn {request.topic}'}""")
         response = await chat.send_message(user_msg)
         
         data = safe_parse_json(response, {
