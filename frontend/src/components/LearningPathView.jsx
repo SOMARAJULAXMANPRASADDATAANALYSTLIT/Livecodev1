@@ -173,6 +173,7 @@ const LearningPathView = () => {
   const handleOnboardingComplete = async () => {
     setIsLoading(true);
     try {
+      // First create the learning path
       const response = await fetch(`${BACKEND_URL}/api/learning/onboard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -182,13 +183,38 @@ const LearningPathView = () => {
       if (!response.ok) throw new Error("Failed to create learning path");
       
       const data = await response.json();
+      
+      // Then research online resources for the target role
+      toast.info("Researching free courses and resources...");
+      
+      try {
+        const resourcesResponse = await fetch(`${BACKEND_URL}/api/learning/research-resources`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: onboardingData.targetRole,
+            level: "beginner",
+            goal: `Become a ${onboardingData.targetRole}`
+          })
+        });
+        
+        if (resourcesResponse.ok) {
+          const resourcesData = await resourcesResponse.json();
+          // Add resources to the skill tree
+          data.skill_tree.online_resources = resourcesData;
+        }
+      } catch (error) {
+        console.error("Resources research failed:", error);
+        // Continue even if resources research fails
+      }
+      
       setUserProfile(data.profile);
       setSkillTree(data.skill_tree);
       setWeeklyPlan(data.weekly_plan);
       setProgress(data.progress || { completed: 0, total: data.skill_tree?.nodes?.length || 0, velocity: 0 });
       setPhase("roadmap");
       addXp(100); // XP for starting journey
-      toast.success("Learning path created!");
+      toast.success("Learning path created with curated resources!");
     } catch (error) {
       toast.error("Failed to create learning path");
       console.error(error);
