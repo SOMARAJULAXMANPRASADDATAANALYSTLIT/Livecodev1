@@ -3585,6 +3585,70 @@ Use web search to get CURRENT, REAL resources with working URLs.""")
         logger.error(f"Learning resources research error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Video Learning Q&A
+class VideoQARequest(BaseModel):
+    question: str
+    video_title: str
+    video_id: str
+    current_time: float = 0
+    skill_level: str = "intermediate"
+    has_transcript: bool = False
+
+@api_router.post("/learning/video-qa")
+async def video_qa(request: VideoQARequest):
+    """Answer questions about a video being watched"""
+    try:
+        skill_context = get_skill_context(request.skill_level)
+        
+        system_prompt = f"""You are an expert teaching assistant helping a student understand an educational video.
+
+VIDEO CONTEXT:
+- Title: {request.video_title}
+- Video ID: {request.video_id}
+- Current timestamp: {int(request.current_time)}s
+
+{skill_context}
+
+YOUR ROLE:
+- Answer questions about the video content
+- Explain concepts clearly and thoroughly
+- Provide code examples when relevant
+- Use analogies to simplify complex topics
+- Reference specific parts of the video when helpful
+
+RESPONSE STYLE:
+- Start with a direct answer
+- Then provide detailed explanation
+- Use bullet points for clarity
+- Include examples or analogies
+- End with "Need me to explain more?" if complex
+
+Keep responses focused, clear, and educational. Use markdown formatting.
+"""
+        
+        chat = get_chat_instance(system_prompt, model_type="fast")
+        
+        context = f"""Student is watching: "{request.video_title}"
+
+Student's question: {request.question}
+
+{'[Transcript available - you can reference video content]' if request.has_transcript else '[Limited context - provide general educational answer]'}
+
+Provide a helpful, clear explanation that helps the student learn."""
+        
+        user_msg = UserMessage(text=context)
+        response = await chat.send_message(user_msg)
+        
+        return {
+            "answer": response or "I apologize, but I need more context to answer that question accurately.",
+            "video_id": request.video_id,
+            "timestamp": request.current_time
+        }
+        
+    except Exception as e:
+        logger.error(f"Video QA error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router
 app.include_router(api_router)
 
