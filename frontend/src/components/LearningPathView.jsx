@@ -611,7 +611,7 @@ const OnboardingPhase = ({ step, setStep, data, setData, onComplete, isLoading }
   };
 
   // Check if step 0 can continue - either has targetRole OR has industry selected
-  const canContinueStep0 = data.industry !== "";
+  const canContinueStep0 = data.targetRole.trim() !== "" || data.industry !== "";
 
   return (
     <div className="h-[calc(100vh-120px)] flex items-center justify-center">
