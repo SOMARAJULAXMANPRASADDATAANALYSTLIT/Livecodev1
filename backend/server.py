@@ -323,14 +323,35 @@ SKILL LEVEL: {skill_level.upper()}
 - Approach: {level_data['approach']}
 """
 
-def get_chat_instance(system_message: str, session_id: str = None):
+def get_chat_instance(system_message: str, session_id: str = None, model_type: str = "fast"):
+    """
+    Get a chat instance with appropriate Gemini model based on task type.
+    
+    model_type options:
+    - "fast": gemini-3-flash-preview (default, for quick responses)
+    - "pro": gemini-3-pro-preview (for deep research, complex reasoning)
+    - "balanced": gemini-2.5-pro (for balanced performance)
+    - "ultra_fast": gemini-2.5-flash-lite (for high-volume, simple tasks)
+    """
     if not session_id:
         session_id = str(uuid.uuid4())
+    
+    # Model selection based on task type
+    model_map = {
+        "fast": "gemini-3-flash-preview",
+        "pro": "gemini-3-pro-preview", 
+        "balanced": "gemini-2.5-pro",
+        "ultra_fast": "gemini-2.5-flash-lite"
+    }
+    
+    selected_model = model_map.get(model_type, "gemini-3-flash-preview")
+    
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
         session_id=session_id,
         system_message=system_message
-    ).with_model("gemini", "gemini-2.0-flash")
+    ).with_model("gemini", selected_model)
+    
     return chat
 
 def safe_parse_json(response: str, default: dict = None) -> dict:
