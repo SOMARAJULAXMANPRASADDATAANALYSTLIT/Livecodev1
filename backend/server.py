@@ -3236,13 +3236,6 @@ Respond with JSON."""
             "message": "Synthesizing findings into strategic insights..."
         })
         
-        # Combine all research into comprehensive report
-        all_data = {
-            "company_overview": stage1_data,
-            "products_services": stage2_data,
-            "competitive_analysis": stage3_data
-        }
-        
         # Generate comprehensive 8-sheet Excel data
         sheets = {
             "1_Company_Overview": [
