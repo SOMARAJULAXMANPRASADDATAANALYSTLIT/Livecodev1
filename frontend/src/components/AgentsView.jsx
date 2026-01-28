@@ -1036,67 +1036,126 @@ const SpecialResultCard = ({ result, onDownload }) => {
     );
   }
   
-  if (result.type === "business") {
+  if (result.type === "business" || result.type === "business_deep") {
     const { data } = result;
     const sheets = data.sheets || {};
+    const isDeepResearch = result.type === "business_deep";
     
     return (
       <div className="glass-light rounded-2xl p-6 border border-[#FBBC04]/30">
-        <div className="flex items-center justify-between mb-4">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#FBBC04]/20 flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-[#FBBC04]" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#FBBC04] to-[#EA4335] flex items-center justify-center">
+              <BarChart3 className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="font-bold text-lg">{data.company_name}</h3>
-              <p className="text-xs text-white/50">Business Intelligence Report</p>
+              <h3 className="font-bold text-xl">{data.company_name}</h3>
+              <p className="text-sm text-white/60">
+                {isDeepResearch ? "🔬 Deep Research Report - 8 Sheets" : "Business Intelligence Report"}
+              </p>
             </div>
           </div>
-          <Button onClick={onDownload} size="sm" className="bg-[#FBBC04] text-black hover:bg-[#FBBC04]/80">
-            <Download className="w-4 h-4 mr-2" />
-            Download HTML
-          </Button>
+          <div className="flex gap-2">
+            {data.html_report && (
+              <Button 
+                onClick={() => {
+                  const blob = new Blob([data.html_report], { type: 'text/html' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${data.company_name}_report.html`;
+                  a.click();
+                }}
+                size="sm" 
+                className="bg-[#FBBC04] text-black hover:bg-[#FBBC04]/80 gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                HTML Report
+              </Button>
+            )}
+            <Button 
+              onClick={onDownload} 
+              size="sm" 
+              variant="outline"
+              className="border-[#34A853] text-[#34A853] hover:bg-[#34A853]/10 gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Excel Data
+            </Button>
+          </div>
         </div>
         
-        {/* Report Sheets */}
-        <div className="space-y-2">
-          {Object.entries(sheets).map(([sheetName, rows]) => (
-            <div key={sheetName} className="border border-white/10 rounded-xl overflow-hidden">
-              <button
-                onClick={() => setExpandedSheet(expandedSheet === sheetName ? null : sheetName)}
-                className="w-full p-3 flex items-center justify-between hover:bg-white/5 transition-colors"
-              >
-                <span className="font-medium text-sm">
-                  {sheetName.replace(/_/g, " ")}
-                </span>
-                <ChevronRight className={`w-4 h-4 transition-transform ${expandedSheet === sheetName ? "rotate-90" : ""}`} />
-              </button>
-              {expandedSheet === sheetName && rows && rows.length > 0 && (
-                <div className="p-3 border-t border-white/10 bg-white/5 max-h-60 overflow-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-white/10">
-                        {Object.keys(rows[0]).map(key => (
-                          <th key={key} className="text-left p-2 text-white/50">
-                            {key.replace(/_/g, " ")}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.slice(0, 5).map((row, i) => (
-                        <tr key={i} className="border-b border-white/5">
-                          {Object.values(row).map((val, j) => (
-                            <td key={j} className="p-2 text-white/70">{String(val)}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+        {/* Deep Research Badge */}
+        {isDeepResearch && (
+          <div className="mb-4 p-3 bg-gradient-to-r from-[#667eea]/10 to-[#764ba2]/10 border border-[#667eea]/30 rounded-xl">
+            <div className="flex items-center gap-2 text-sm">
+              <Zap className="w-4 h-4 text-[#667eea]" />
+              <span className="font-semibold">Multi-Agent Deep Research Complete</span>
+              <span className="ml-auto text-xs text-white/50">
+                {Object.keys(sheets).length} comprehensive sheets generated
+              </span>
             </div>
-          ))}
+          </div>
+        )}
+        
+        {/* Report Sheets - Expandable */}
+        <div className="space-y-2">
+          {Object.keys(sheets).length === 0 ? (
+            <div className="text-center py-8 text-white/40">
+              No sheet data available
+            </div>
+          ) : (
+            Object.entries(sheets).map(([sheetName, rows]) => (
+              <div key={sheetName} className="border border-white/10 rounded-xl overflow-hidden bg-black/20">
+                <button
+                  onClick={() => setExpandedSheet(expandedSheet === sheetName ? null : sheetName)}
+                  className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#FBBC04]/20 flex items-center justify-center">
+                      <FileText className="w-4 h-4 text-[#FBBC04]" />
+                    </div>
+                    <div className="text-left">
+                      <span className="font-semibold text-sm block">
+                        {sheetName.replace(/_/g, " ").replace(/^\d+_/, "")}
+                      </span>
+                      <span className="text-xs text-white/40">
+                        {Array.isArray(rows) ? rows.length : 0} rows
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className={`w-5 h-5 transition-transform ${expandedSheet === sheetName ? "rotate-90" : ""}`} />
+                </button>
+                {expandedSheet === sheetName && rows && Array.isArray(rows) && rows.length > 0 && (
+                  <div className="border-t border-white/10 bg-white/5">
+                    <div className="p-4 max-h-80 overflow-auto">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-[#667eea]/20">
+                          <tr className="border-b border-white/20">
+                            {Object.keys(rows[0]).map(key => (
+                              <th key={key} className="text-left p-3 text-white/80 font-semibold">
+                                {key.replace(/_/g, " ").toUpperCase()}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((row, i) => (
+                            <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                              {Object.values(row).map((val, j) => (
+                                <td key={j} className="p-3 text-white/70">{String(val)}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
     );
