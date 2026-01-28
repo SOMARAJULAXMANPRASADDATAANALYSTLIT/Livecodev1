@@ -208,6 +208,8 @@ const LearningPathView = () => {
           const resourcesData = await resourcesResponse.json();
           // Add resources to the skill tree
           data.skill_tree.online_resources = resourcesData;
+          setOnlineResources(resourcesData);
+          toast.success("Found " + (resourcesData.youtube_playlists?.length || 0) + " YouTube playlists!");
         }
       } catch (error) {
         console.error("Resources research failed:", error);
