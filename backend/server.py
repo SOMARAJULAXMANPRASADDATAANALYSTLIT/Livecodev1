@@ -3351,7 +3351,7 @@ RESPONSE FORMAT (JSON):
 IMPORTANT: Only include articles with REAL, working URLs. If you can't verify a URL, don't include it.
 Find 6-8 recent articles."""
         
-        chat = get_chat_instance(system_prompt)
+        chat = get_chat_instance(system_prompt, model_type="fast")  # Use fast model for news search
         user_msg = UserMessage(text=f"Find latest news: {search_query}")
         response = await chat.send_message(user_msg)
         
