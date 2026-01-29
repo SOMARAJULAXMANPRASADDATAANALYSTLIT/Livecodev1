@@ -121,4 +121,5 @@ uvicorn==0.25.0
 watchfiles==1.1.1
 websockets==15.0.1
 yarl==1.22.0
+youtube-transcript-api==0.6.1
 zipp==3.23.0
