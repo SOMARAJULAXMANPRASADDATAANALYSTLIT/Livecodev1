@@ -80,8 +80,6 @@ Let's learn together! 🚀`
     fetchTranscript(videoId);
   }, [videoId, videoTitle, skillLevel]);
 
-  const videoId = getVideoId(videoUrl);
-
   const fetchTranscript = async (videoId) => {
     if (!videoId) return;
     
