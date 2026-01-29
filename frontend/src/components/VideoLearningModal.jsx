@@ -39,25 +39,148 @@ const VideoLearningModal = ({ videoUrl, videoTitle, onClose, skillLevel = "inter
   const videoId = getVideoId(videoUrl);
 
   useEffect(() => {
-    // Initial welcome message
+    // Enhanced welcome message with AI watching feature
     setMessages([{
       role: "assistant",
-      content: `🎥 **${videoTitle}**\n\nI'm your AI learning companion! I'll help you understand this video.\n\n**I can:**\n- ✅ Explain concepts from the video\n- ✅ Answer questions about what you're watching\n- ✅ Provide additional context and examples\n- ✅ Help you understand difficult parts\n\n**Tips:**\n- Pause the video when you have questions\n- Ask me to explain specific topics\n- Request code examples or visual diagrams\n\nLet's start learning! 🚀`
+      content: `# 🎥 ${videoTitle}
+
+👁️ **AI Watching Mode: ACTIVE**
+
+I'm your AI learning companion, and I'll be **watching this video alongside you!**
+
+## 🚀 What I Can Do:
+
+### Real-Time Assistance
+- 👁️ **Watch with you** - I monitor video progress
+- 💡 **Proactive hints** - I'll suggest pauses when concepts get complex
+- 🎯 **Contextual help** - Ask about what's on screen right now
+- ✅ **Comprehension checks** - Quick quizzes to test understanding
+
+### How to Use Me:
+- Just **pause and ask** whenever you're confused
+- I'll track where you are in the video
+- Click **"Help with this part"** for instant explanations
+- I can **fetch the transcript** for better context
+
+**Quick Actions:**
+- 📖 Load Transcript
+- 💡 Explain Current Section
+- ❓ Generate Quiz Question
+- 🎯 Get Learning Tips
+
+**Tips:**
+- The more you interact, the better I can help!
+- Don't hesitate to ask "basic" questions
+- I adapt explanations to your skill level: **${skillLevel}**
+
+Let's learn together! 🚀`
     }]);
 
-    // Fetch YouTube transcript (simulation - in production, use YouTube Transcript API)
+    // Fetch YouTube transcript
     fetchTranscript(videoId);
-  }, [videoId, videoTitle]);
+  }, [videoId, videoTitle, skillLevel]);
+
+  const videoId = getVideoId(videoUrl);
 
   const fetchTranscript = async (videoId) => {
-    // In production, you'd call YouTube Transcript API or your backend
-    // For now, we'll simulate having transcript context
-    setTranscript({
-      videoId,
-      title: videoTitle,
-      available: true
-    });
+    if (!videoId) return;
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/learning/video/transcript`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          video_id: videoId,
+          language: "en"
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success && data.available) {
+        setTranscript(data.full_text);
+        setTranscriptSegments(data.transcript);
+        
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `✅ **Transcript loaded!** (${data.total_segments} segments)\n\nI can now provide precise, context-aware help based on what's being said in the video.`
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `⚠️ **Transcript not available** for this video.\n\nI can still help, but my answers will be more general without the exact video content.`
+        }]);
+      }
+    } catch (error) {
+      console.error("Transcript fetch error:", error);
+    }
   };
+
+  // Track video progress and provide proactive help
+  const checkForProactiveHelp = useCallback(async () => {
+    if (!aiWatching || isLoading || !videoId) return;
+    
+    // Find current transcript segment
+    const currentSegment = transcriptSegments.find(seg => 
+      currentTime >= seg.start && currentTime <= seg.start + seg.duration
+    );
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/learning/video/proactive-analysis`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          video_id: videoId,
+          video_title: videoTitle,
+          current_time: currentTime,
+          last_pause_time: lastPauseTime,
+          watch_duration: (Date.now() - watchStartTime.current) / 1000,
+          skill_level: skillLevel,
+          transcript_context: currentSegment?.text || null
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.should_intervene && data.severity !== "low") {
+        setProactiveHelp({
+          message: data.proactive_message,
+          reason: data.reason,
+          severity: data.severity
+        });
+        
+        // Auto-dismiss low severity after 10 seconds
+        if (data.severity === "medium") {
+          setTimeout(() => setProactiveHelp(null), 10000);
+        }
+      }
+    } catch (error) {
+      console.error("Proactive analysis error:", error);
+    }
+  }, [currentTime, videoId, videoTitle, skillLevel, lastPauseTime, aiWatching, isLoading, transcriptSegments]);
+
+  // Proactive help check every 10 seconds
+  useEffect(() => {
+    if (!aiWatching) return;
+    
+    const interval = setInterval(() => {
+      checkForProactiveHelp();
+    }, 10000);
+    
+    return () => clearInterval(interval);
+  }, [checkForProactiveHelp, aiWatching]);
+
+  // Update current time (simulate video player tracking)
+  useEffect(() => {
+    if (!isPlaying) return;
+    
+    const interval = setInterval(() => {
+      setCurrentTime(prev => prev + 1);
+      setWatchDuration(prev => prev + 1);
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [isPlaying]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
