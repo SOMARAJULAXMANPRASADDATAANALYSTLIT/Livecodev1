@@ -1,5 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import { X, Play, Pause, MessageSquare, Lightbulb, Send, Loader2, Volume2, VolumeX, Maximize2, Minimize2 } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { 
+  X, Play, Pause, MessageSquare, Lightbulb, Send, Loader2, Volume2, VolumeX, 
+  Maximize2, Minimize2, Sparkles, CheckCircle, AlertCircle, HelpCircle, Zap,
+  Eye, Brain, BookOpen, Target
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -12,11 +16,19 @@ const VideoLearningModal = ({ videoUrl, videoTitle, onClose, skillLevel = "inter
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [transcript, setTranscript] = useState(null);
+  const [transcriptSegments, setTranscriptSegments] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
+  const [lastPauseTime, setLastPauseTime] = useState(null);
+  const [watchDuration, setWatchDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [aiWatching, setAiWatching] = useState(true);
+  const [proactiveHelp, setProactiveHelp] = useState(null);
+  const [showComprehensionCheck, setShowComprehensionCheck] = useState(false);
+  const [comprehensionQuestion, setComprehensionQuestion] = useState(null);
   const iframeRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const watchStartTime = useRef(Date.now());
 
   // Extract YouTube video ID
   const getVideoId = (url) => {
