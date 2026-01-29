@@ -4543,6 +4543,69 @@ Remember: You have REAL tools - use them! 🦞"""
 # Include Moltbot router
 app.include_router(moltbot_router)
 
+# ============== API CONFIGURATION MANAGEMENT ==============
+
+from config_manager import config_manager, APIConfig
+
+config_router = APIRouter(prefix="/api/config", tags=["Configuration"])
+
+@config_router.get("/")
+async def get_config():
+    """Get current API configuration (masks sensitive data)"""
+    config = config_manager.get_config()
+    config_dict = config.dict()
+    
+    # Mask API keys (show only first/last 4 chars)
+    for key in ['brave_api_key', 'emergent_llm_key', 'openai_api_key', 'anthropic_api_key']:
+        if config_dict.get(key):
+            val = config_dict[key]
+            if len(val) > 8:
+                config_dict[key] = f"{val[:4]}...{val[-4:]}"
+    
+    return config_dict
+
+@config_router.post("/update")
+async def update_config(updates: Dict[str, Any]):
+    """Update API configuration"""
+    try:
+        config = config_manager.update_config(updates)
+        return {"success": True, "config": config.dict()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@config_router.post("/test-key")
+async def test_api_key(service: str, api_key: str):
+    """Test if an API key works"""
+    result = config_manager.test_api_key(service, api_key)
+    return result
+
+@config_router.get("/services")
+async def get_services_status():
+    """Get status of all configured services"""
+    config = config_manager.get_config()
+    
+    return {
+        "brave": {
+            "configured": bool(config.brave_api_key),
+            "enabled": True
+        },
+        "emergent": {
+            "configured": bool(config.emergent_llm_key),
+            "enabled": True
+        },
+        "whatsapp": {
+            "configured": config.whatsapp_enabled,
+            "enabled": config.whatsapp_enabled
+        },
+        "browser": {
+            "configured": True,
+            "headless": config.browser_headless,
+            "enabled": True
+        }
+    }
+
+app.include_router(config_router)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
