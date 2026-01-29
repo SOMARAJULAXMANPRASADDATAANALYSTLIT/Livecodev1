@@ -49,10 +49,8 @@ const VideoLearningModal = ({ videoUrl, videoTitle, onClose, skillLevel = "inter
   const videoId = getVideoId(videoUrl);
 
   useEffect(() => {
-    // Enhanced welcome message with AI watching feature
-    setMessages([{
-      role: "assistant",
-      content: `# 🎥 ${videoTitle}
+    // Different welcome message based on whether video is available
+    const welcomeContent = videoId ? `# 🎥 ${videoTitle}
 
 👁️ **AI Watching Mode: ACTIVE**
 
@@ -65,6 +63,7 @@ I'm your AI learning companion, and I'll be **watching this video alongside you!
 - 💡 **Proactive hints** - I'll suggest pauses when concepts get complex
 - 🎯 **Contextual help** - Ask about what's on screen right now
 - ✅ **Comprehension checks** - Quick quizzes to test understanding
+- 📸 **Screenshot analysis** - Drag & drop a screenshot for instant explanation
 
 ### How to Use Me:
 - Just **pause and ask** whenever you're confused
@@ -72,22 +71,45 @@ I'm your AI learning companion, and I'll be **watching this video alongside you!
 - Click **"Help with this part"** for instant explanations
 - I can **fetch the transcript** for better context
 
-**Quick Actions:**
-- 📖 Load Transcript
-- 💡 Explain Current Section
-- ❓ Generate Quiz Question
-- 🎯 Get Learning Tips
-
 **Tips:**
 - The more you interact, the better I can help!
 - Don't hesitate to ask "basic" questions
 - I adapt explanations to your skill level: **${skillLevel}**
 
-Let's learn together! 🚀`
+Let's learn together! 🚀` : `# 📚 ${videoTitle}
+
+I'm your AI learning companion for this topic!
+
+## 🚀 What I Can Do:
+
+### Topic Assistance
+- 💬 **Answer questions** about ${videoTitle}
+- 💡 **Explain concepts** at your level
+- 🎯 **Provide examples** and practical applications
+- ✅ **Test your understanding** with quizzes
+
+### No Video Yet?
+You can **add a YouTube video** to enhance your learning:
+- Click the "Add URL" button below
+- Paste any relevant YouTube tutorial link
+- I'll then be able to use the video transcript for more context!
+
+**Tips:**
+- Ask me anything about ${videoTitle}
+- I adapt explanations to your skill level: **${skillLevel}**
+- Share screenshots for visual explanations
+
+Let's learn together! 🚀`;
+
+    setMessages([{
+      role: "assistant",
+      content: welcomeContent
     }]);
 
-    // Fetch YouTube transcript
-    fetchTranscript(videoId);
+    // Fetch YouTube transcript only if video exists
+    if (videoId) {
+      fetchTranscript(videoId);
+    }
   }, [videoId, videoTitle, skillLevel]);
 
   const fetchTranscript = async (videoId) => {
