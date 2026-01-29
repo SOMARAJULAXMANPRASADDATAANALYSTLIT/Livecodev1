@@ -18,7 +18,7 @@ AI-powered educational platform providing personalized, real-time coding assista
 
 ## Core Requirements
 
-### Learning Path Mentor System (NEW - January 27, 2026)
+### Learning Path Mentor System (Enhanced - January 29, 2026)
 - [x] 4-step onboarding wizard (Goal, Background, Style, Commitment)
 - [x] Multi-industry skill trees (Software, Data, Business, Healthcare, Travel, Architecture)
 - [x] Weekly learning plans with tasks and homework
@@ -26,6 +26,10 @@ AI-powered educational platform providing personalized, real-time coding assista
 - [x] Progress tracking and velocity metrics
 - [x] Topic completion tracking with scores
 - [x] Career fit analysis and personalized recommendations
+- [x] **NEW: Editable Learning Topics** - Add custom topics with YouTube URLs
+- [x] **NEW: YouTube Video Integration** - Watch videos with AI mentor companion
+- [x] **NEW: Free Learning Resources** - Auto-curated YouTube videos & courses
+- [x] **NEW: Video Learning Modal** - Embedded player with AI chat (Explain/Example/Quiz)
 
 ### Multi-Industry AI Agents (NEW - January 27, 2026)
 - [x] **Coding Mentor Agent** - Full IDE + tutor for software development
