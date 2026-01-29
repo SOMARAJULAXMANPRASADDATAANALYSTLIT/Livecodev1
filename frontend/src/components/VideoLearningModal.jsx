@@ -849,14 +849,65 @@ Let's learn together! 🚀`
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
-            <div className="p-4 border-t border-white/10 bg-black/20">
+            {/* Input with Drag & Drop */}
+            <div 
+              ref={dropZoneRef}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              className={`p-4 border-t border-white/10 bg-black/20 transition-colors ${
+                dragOver ? "bg-[#667eea]/20 border-[#667eea]/50" : ""
+              }`}
+            >
+              {/* Drag overlay */}
+              {dragOver && (
+                <div className="absolute inset-0 bg-[#667eea]/10 border-2 border-dashed border-[#667eea] rounded-lg flex items-center justify-center z-10">
+                  <div className="text-center">
+                    <Image className="w-8 h-8 mx-auto mb-2 text-[#667eea]" />
+                    <p className="text-sm font-medium">Drop screenshot to analyze</p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Uploaded image preview */}
+              {uploadedImage && (
+                <div className="mb-3 relative">
+                  <img
+                    src={uploadedImage.preview}
+                    alt="Screenshot"
+                    className="max-h-32 rounded-lg border border-white/20"
+                  />
+                  <button
+                    onClick={() => setUploadedImage(null)}
+                    className="absolute -top-2 -right-2 p-1 bg-[#EA4335] rounded-full"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              
               <div className="flex gap-2">
+                {/* Screenshot upload button */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition-colors"
+                  title="Upload screenshot"
+                >
+                  <Image className="w-5 h-5 text-[#667eea]" />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                
                 <Textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Ask about the video..."
+                  placeholder="Ask about the video or drop a screenshot..."
                   className="flex-1 min-h-[60px] max-h-[120px] bg-white/5 border-white/10 text-sm"
                   disabled={isLoading}
                 />
@@ -872,8 +923,9 @@ Let's learn together! 🚀`
                   )}
                 </Button>
               </div>
-              <div className="mt-2 text-xs text-white/40">
-                💡 Tip: AI is watching - ask about what you just saw!
+              <div className="mt-2 flex items-center gap-4 text-xs text-white/40">
+                <span>💡 Tip: AI uses transcript context</span>
+                <span>📸 Drag & drop screenshots to analyze</span>
               </div>
             </div>
           </div>
