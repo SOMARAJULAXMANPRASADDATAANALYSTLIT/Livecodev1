@@ -1123,9 +1123,16 @@ print(result)"""
         print(f"📍 Base URL: {self.base_url}")
         print("=" * 60)
 
-        # Test all endpoints - prioritizing review request features
+        # Test all endpoints - prioritizing NEW MOLTBOT INTEGRATION features
         tests = [
             self.test_health,
+            # NEW MOLTBOT INTEGRATION - HIGHEST PRIORITY
+            self.test_video_transcript,
+            self.test_video_contextual_help,
+            self.test_video_proactive_analysis,
+            self.test_video_comprehension_check,
+            self.test_moltbot_chat,
+            self.test_moltbot_status,
             # Review Request Features - HIGH PRIORITY
             self.test_project_upload,
             self.test_project_full_analysis,
