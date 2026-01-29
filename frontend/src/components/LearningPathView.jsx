@@ -370,6 +370,7 @@ const LearningPathView = () => {
   if (phase === "roadmap") {
     return <RoadmapPhase 
       skillTree={skillTree}
+      setSkillTree={setSkillTree}
       weeklyPlan={weeklyPlan}
       progress={progress}
       userProfile={userProfile}
