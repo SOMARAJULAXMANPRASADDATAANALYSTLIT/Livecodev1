@@ -846,6 +846,7 @@ const MessageBubble = ({ message, agentColor }) => {
 const SpecialResultCard = ({ result, onDownload }) => {
   const [expandedSheet, setExpandedSheet] = useState(null);
   const [isZoomed, setIsZoomed] = useState(false);
+  const [showHtmlReport, setShowHtmlReport] = useState(false);
   
   if (result.type === "health") {
     const { data } = result;
