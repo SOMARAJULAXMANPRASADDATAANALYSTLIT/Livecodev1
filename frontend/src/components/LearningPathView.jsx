@@ -368,25 +368,41 @@ const LearningPathView = () => {
   }
 
   if (phase === "roadmap") {
-    return <RoadmapPhase 
-      skillTree={skillTree}
-      setSkillTree={setSkillTree}
-      weeklyPlan={weeklyPlan}
-      progress={progress}
-      userProfile={userProfile}
-      onStartTopic={startTopic}
-      onViewDashboard={() => setPhase("dashboard")}
-      onGoHome={resetToHome}
-      xp={xp}
-      level={level}
-      streak={streak}
-      badges={badges}
-      onlineResources={onlineResources}
-      onPlayVideo={(video) => {
-        setCurrentVideo(video);
-        setShowVideoModal(true);
-      }}
-    />;
+    return (
+      <>
+        <RoadmapPhase 
+          skillTree={skillTree}
+          setSkillTree={setSkillTree}
+          weeklyPlan={weeklyPlan}
+          progress={progress}
+          userProfile={userProfile}
+          onStartTopic={startTopic}
+          onViewDashboard={() => setPhase("dashboard")}
+          onGoHome={resetToHome}
+          xp={xp}
+          level={level}
+          streak={streak}
+          badges={badges}
+          onlineResources={onlineResources}
+          onPlayVideo={(video) => {
+            setCurrentVideo(video);
+            setShowVideoModal(true);
+          }}
+        />
+        {/* Video Learning Modal - rendered at roadmap phase level */}
+        {showVideoModal && currentVideo && (
+          <VideoLearningModal
+            videoUrl={currentVideo.url}
+            videoTitle={currentVideo.title}
+            onClose={() => {
+              setShowVideoModal(false);
+              setCurrentVideo(null);
+            }}
+            skillLevel={userProfile?.experience || "intermediate"}
+          />
+        )}
+      </>
+    );
   }
 
   if (phase === "dashboard") {
