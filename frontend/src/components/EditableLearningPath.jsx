@@ -430,6 +430,18 @@ const EditableLearningPath = ({ skillTree, userProfile, onUpdateTree }) => {
 
           {/* Action buttons */}
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Chat button - always visible */}
+            <Button
+              onClick={() => hasVideo ? handlePlayVideo(node) : handleOpenChat(node)}
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-[#667eea] hover:bg-[#667eea]/10"
+              title={hasVideo ? "Watch with AI" : "Chat about this topic"}
+            >
+              <MessageSquare className="w-3 h-3 mr-1" />
+              Chat
+            </Button>
+            
             {hasVideo ? (
               <Button
                 onClick={() => handlePlayVideo(node)}
