@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { 
   X, Play, Pause, MessageSquare, Lightbulb, Send, Loader2, Volume2, VolumeX, 
   Maximize2, Minimize2, Sparkles, CheckCircle, AlertCircle, HelpCircle, Zap,
-  Eye, Brain, BookOpen, Target
+  Eye, Brain, BookOpen, Target, Link2, Search, Upload, Image, Youtube
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
