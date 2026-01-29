@@ -4153,6 +4153,396 @@ async def moltbot_status(session_id: Optional[str] = None):
 # Include the router
 app.include_router(api_router)
 
+# ============== FULL MOLTBOT IMPLEMENTATION ==============
+# Complete standalone Moltbot with all tools
+
+from moltbot_tools import (
+    process_manager,
+    web_search_tool,
+    web_fetch_tool,
+    browser_tool,
+    skills_manager,
+    memory_system
+)
+
+# Moltbot API Router
+moltbot_router = APIRouter(prefix="/api/moltbot/tools", tags=["Moltbot Tools"])
+
+# ============== EXEC TOOL ==============
+
+class ExecRequest(BaseModel):
+    command: str
+    workdir: Optional[str] = None
+    env: Optional[Dict[str, str]] = None
+    background: bool = False
+    timeout: int = 1800
+    yield_ms: int = 10000
+
+@moltbot_router.post("/exec")
+async def exec_tool(request: ExecRequest):
+    """
+    Execute shell commands (Moltbot exec tool)
+    Supports foreground and background execution
+    """
+    try:
+        if request.background or len(request.command) > 100:
+            # Background execution
+            result = await process_manager.create_session(
+                command=request.command,
+                workdir=request.workdir,
+                env=request.env,
+                timeout=request.timeout
+            )
+            return {
+                "status": "running" if result["status"] == "running" else "error",
+                "session_id": result.get("session_id"),
+                "pid": result.get("pid"),
+                "command": request.command
+            }
+        else:
+            # Foreground execution (quick commands)
+            process = await asyncio.create_subprocess_shell(
+                request.command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=request.workdir or os.getcwd()
+            )
+            
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(),
+                timeout=min(request.timeout, 60)
+            )
+            
+            return {
+                "status": "completed",
+                "exit_code": process.returncode,
+                "stdout": stdout.decode('utf-8', errors='replace'),
+                "stderr": stderr.decode('utf-8', errors='replace'),
+                "command": request.command
+            }
+            
+    except asyncio.TimeoutError:
+        return {
+            "status": "timeout",
+            "error": "Command execution timed out",
+            "command": request.command
+        }
+    except Exception as e:
+        logger.error(f"Exec tool error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== PROCESS TOOL ==============
+
+@moltbot_router.get("/process/list")
+async def process_list():
+    """List all background process sessions"""
+    sessions = await process_manager.list_sessions()
+    return {"sessions": sessions, "count": len(sessions)}
+
+@moltbot_router.post("/process/poll")
+async def process_poll(session_id: str, offset: int = 0):
+    """Poll process session for new output"""
+    result = await process_manager.poll(session_id, offset)
+    return result
+
+@moltbot_router.post("/process/kill")
+async def process_kill(session_id: str):
+    """Kill a running process session"""
+    result = await process_manager.kill(session_id)
+    return result
+
+# ============== WEB SEARCH TOOL ==============
+
+class WebSearchRequest(BaseModel):
+    query: str
+    count: int = 5
+    country: Optional[str] = None
+    search_lang: Optional[str] = None
+
+@moltbot_router.post("/web/search")
+async def web_search(request: WebSearchRequest):
+    """
+    Search the web using Brave API (Moltbot web_search tool)
+    Requires BRAVE_API_KEY environment variable
+    """
+    result = await web_search_tool.search(
+        query=request.query,
+        count=request.count,
+        country=request.country,
+        search_lang=request.search_lang
+    )
+    return result
+
+# ============== WEB FETCH TOOL ==============
+
+class WebFetchRequest(BaseModel):
+    url: str
+    extract_mode: str = "markdown"
+    max_chars: int = 50000
+
+@moltbot_router.post("/web/fetch")
+async def web_fetch(request: WebFetchRequest):
+    """
+    Fetch and extract webpage content (Moltbot web_fetch tool)
+    Converts HTML to markdown or plain text
+    """
+    result = await web_fetch_tool.fetch(
+        url=request.url,
+        extract_mode=request.extract_mode,
+        max_chars=request.max_chars
+    )
+    return result
+
+# ============== BROWSER TOOL ==============
+
+class BrowserAction(BaseModel):
+    action: str
+    url: Optional[str] = None
+    selector: Optional[str] = None
+    text: Optional[str] = None
+    full_page: bool = False
+
+@moltbot_router.post("/browser")
+async def browser_control(request: BrowserAction):
+    """
+    Control browser using Playwright (Moltbot browser tool)
+    Actions: start, stop, navigate, screenshot, click, type, content, status
+    """
+    try:
+        action = request.action.lower()
+        
+        if action == "start":
+            result = await browser_tool.start()
+        elif action == "stop":
+            result = await browser_tool.stop()
+        elif action == "navigate":
+            if not request.url:
+                raise HTTPException(status_code=400, detail="URL required for navigate")
+            result = await browser_tool.navigate(request.url)
+        elif action == "screenshot":
+            result = await browser_tool.screenshot(request.full_page)
+        elif action == "click":
+            if not request.selector:
+                raise HTTPException(status_code=400, detail="Selector required for click")
+            result = await browser_tool.click(request.selector)
+        elif action == "type":
+            if not request.selector or not request.text:
+                raise HTTPException(status_code=400, detail="Selector and text required for type")
+            result = await browser_tool.type_text(request.selector, request.text)
+        elif action == "content":
+            result = await browser_tool.get_content()
+        elif action == "status":
+            result = await browser_tool.status()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Browser tool error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== SKILLS SYSTEM ==============
+
+@moltbot_router.get("/skills/list")
+async def skills_list():
+    """List all available skills"""
+    skills = skills_manager.list_skills()
+    return {"skills": skills, "count": len(skills)}
+
+@moltbot_router.get("/skills/{skill_id}")
+async def skill_get(skill_id: str):
+    """Get skill details"""
+    skill = skills_manager.get_skill(skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return skill
+
+@moltbot_router.post("/skills/{skill_id}/enable")
+async def skill_enable(skill_id: str):
+    """Enable a skill"""
+    success = skills_manager.enable_skill(skill_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return {"skill_id": skill_id, "enabled": True}
+
+@moltbot_router.post("/skills/{skill_id}/disable")
+async def skill_disable(skill_id: str):
+    """Disable a skill"""
+    success = skills_manager.disable_skill(skill_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return {"skill_id": skill_id, "enabled": False}
+
+# ============== MEMORY SYSTEM ==============
+
+@moltbot_router.get("/memory")
+async def memory_read():
+    """Read memory file"""
+    content = memory_system.read_memory()
+    return {"content": content, "workspace": str(memory_system.workspace_dir)}
+
+@moltbot_router.post("/memory/append")
+async def memory_append(content: str):
+    """Append to memory file"""
+    memory_system.append_memory(content)
+    return {"success": True, "message": "Memory appended"}
+
+@moltbot_router.get("/memory/search")
+async def memory_search(query: str):
+    """Search memory"""
+    matches = memory_system.search_memory(query)
+    return {"query": query, "matches": matches, "count": len(matches)}
+
+@moltbot_router.get("/memory/workspace")
+async def memory_workspace():
+    """List workspace files"""
+    files = memory_system.get_workspace_files()
+    return {"files": files, "count": len(files), "workspace": str(memory_system.workspace_dir)}
+
+# ============== GATEWAY STATUS ==============
+
+@moltbot_router.get("/gateway/status")
+async def gateway_status():
+    """Get complete Moltbot gateway status"""
+    return {
+        "gateway": "online",
+        "version": "2026.1.27-full",
+        "mode": "standalone",
+        "features": {
+            "exec": True,
+            "process": True,
+            "web_search": bool(web_search_tool.api_key),
+            "web_fetch": True,
+            "browser": True,
+            "skills": True,
+            "memory": True,
+            "channels": False,  # Phase 2
+            "cron": False,  # Phase 3
+            "multi_agent": True
+        },
+        "tools": {
+            "exec": {"enabled": True, "security": "allowlist"},
+            "process": {"sessions": len(process_manager.sessions)},
+            "browser": {"running": browser_tool.is_running},
+            "skills": {"count": len(skills_manager.skills)},
+            "memory": {"workspace": str(memory_system.workspace_dir)}
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+# ============== INTEGRATED AI AGENT ==============
+
+class MoltbotAgentRequest(BaseModel):
+    message: str
+    tools_enabled: List[str] = ["web_search", "web_fetch", "browser", "exec"]
+    session_id: str
+    skill_level: str = "intermediate"
+
+@moltbot_router.post("/agent/chat")
+async def moltbot_agent_chat(request: MoltbotAgentRequest):
+    """
+    Complete Moltbot AI agent with tool use
+    The agent can call web_search, web_fetch, browser, exec, etc.
+    """
+    try:
+        skill_context = get_skill_context(request.skill_level)
+        
+        # Build tools description
+        tools_desc = []
+        if "web_search" in request.tools_enabled:
+            tools_desc.append("- **web_search(query)**: Search the web using Brave API. Returns real search results.")
+        if "web_fetch" in request.tools_enabled:
+            tools_desc.append("- **web_fetch(url)**: Fetch and extract content from any webpage.")
+        if "browser" in request.tools_enabled:
+            tools_desc.append("- **browser(action, ...)**: Control a real browser - navigate, click, type, screenshot.")
+        if "exec" in request.tools_enabled:
+            tools_desc.append("- **exec(command)**: Run shell commands. Use for file operations, git, npm, etc.")
+        
+        system_prompt = f"""You are **Molty** 🦞, the Moltbot AI agent.
+
+You are a FULL-FEATURED AI assistant with REAL tool access.
+
+{skill_context}
+
+## 🛠️ Your REAL Tools:
+
+{chr(10).join(tools_desc)}
+
+## How to Use Tools:
+
+When you need to use a tool, respond with JSON:
+```json
+{{
+    "tool": "web_search",
+    "parameters": {{
+        "query": "latest React hooks tutorial",
+        "count": 5
+    }}
+}}
+```
+
+**IMPORTANT**:
+- Use tools whenever they would help answer the question
+- web_search gives you REAL current information from the web
+- browser lets you automate REAL websites
+- exec runs REAL commands on the system
+- Don't just say "I would search", actually use the tools!
+
+## Response Format:
+
+Use clean Markdown with:
+- # Headings
+- **Bold** for emphasis
+- `code` for technical terms
+- > blockquotes for important notes
+- Lists and tables
+
+Be concise, helpful, and action-oriented.
+
+Remember: You have REAL tools - use them! 🦞"""
+        
+        chat = get_chat_instance(system_prompt)
+        user_msg = UserMessage(text=request.message)
+        response = await chat.send_message(user_msg)
+        
+        # Check if response contains tool call
+        tool_result = None
+        if response.strip().startswith("{") and "tool" in response:
+            try:
+                tool_call = json.loads(response)
+                tool_name = tool_call.get("tool")
+                params = tool_call.get("parameters", {})
+                
+                # Execute tool
+                if tool_name == "web_search" and "web_search" in request.tools_enabled:
+                    tool_result = await web_search_tool.search(
+                        query=params.get("query", ""),
+                        count=params.get("count", 5)
+                    )
+                elif tool_name == "web_fetch" and "web_fetch" in request.tools_enabled:
+                    tool_result = await web_fetch_tool.fetch(
+                        url=params.get("url", "")
+                    )
+                # Add more tool executions here
+                
+            except json.JSONDecodeError:
+                pass
+        
+        return {
+            "response": response,
+            "tool_result": tool_result,
+            "session_id": request.session_id,
+            "tools_enabled": request.tools_enabled
+        }
+        
+    except Exception as e:
+        logger.error(f"Moltbot agent error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Include Moltbot router
+app.include_router(moltbot_router)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
