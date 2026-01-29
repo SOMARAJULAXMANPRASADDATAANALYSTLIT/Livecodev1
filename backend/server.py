@@ -4606,6 +4606,50 @@ async def get_services_status():
 
 app.include_router(config_router)
 
+# ============== WHATSAPP INTEGRATION ==============
+
+from whatsapp_manager import whatsapp_manager
+
+whatsapp_router = APIRouter(prefix="/api/whatsapp", tags=["WhatsApp"])
+
+@whatsapp_router.post("/start")
+async def whatsapp_start():
+    """Start WhatsApp client"""
+    result = await whatsapp_manager.start()
+    return result
+
+@whatsapp_router.get("/status")
+async def whatsapp_status():
+    """Get WhatsApp status and QR code"""
+    result = await whatsapp_manager.get_status()
+    return result
+
+@whatsapp_router.post("/send")
+async def whatsapp_send(to: str, message: str):
+    """Send WhatsApp message"""
+    result = await whatsapp_manager.send_message(to, message)
+    return result
+
+@whatsapp_router.get("/contacts")
+async def whatsapp_contacts():
+    """Get WhatsApp contacts"""
+    contacts = await whatsapp_manager.get_contacts()
+    return {"contacts": contacts, "count": len(contacts)}
+
+@whatsapp_router.get("/chats")
+async def whatsapp_chats():
+    """Get WhatsApp chats"""
+    chats = await whatsapp_manager.get_chats()
+    return {"chats": chats, "count": len(chats)}
+
+@whatsapp_router.post("/stop")
+async def whatsapp_stop():
+    """Stop WhatsApp client"""
+    result = await whatsapp_manager.stop()
+    return result
+
+app.include_router(whatsapp_router)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
