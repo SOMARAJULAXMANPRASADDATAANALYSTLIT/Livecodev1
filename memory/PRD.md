@@ -131,8 +131,11 @@ AI-powered educational platform providing personalized, real-time coding assista
 - All core features implemented
 - Learning Path Mentor system complete
 - Multi-Industry Agents complete
+- Editable Learning Topics with YouTube integration
+- Video Learning Modal with AI companion
 
 ### P1 (High Priority) - Pending
+- Moltbot full clone implementation (WhatsApp, Telegram, Discord integrations)
 - Full IDE implementation (file explorer, editor tabs, terminal)
 - Gemini Live API integration (real-time audio/video mentoring)
 - Full project execution in sandbox
