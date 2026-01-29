@@ -990,32 +990,71 @@ const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTop
             {/* YouTube Playlists */}
             {onlineResources.youtube_playlists && onlineResources.youtube_playlists.length > 0 && (
               <div className="space-y-2 mb-4">
-                <h4 className="text-sm font-semibold text-white/70">📺 YouTube Playlists</h4>
-                {onlineResources.youtube_playlists.slice(0, 3).map((playlist, idx) => (
-                  <button
+                <h4 className="text-sm font-semibold text-white/70">📺 YouTube Videos & Tutorials</h4>
+                {onlineResources.youtube_playlists.slice(0, 5).map((playlist, idx) => (
+                  <div
                     key={idx}
-                    onClick={() => onPlayVideo && onPlayVideo({
-                      url: playlist.url,
-                      title: playlist.title
-                    })}
-                    className="w-full p-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#EA4335]/50 rounded-lg transition-all text-left group"
+                    className="w-full p-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-[#EA4335]/50 rounded-lg transition-all group"
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-[#EA4335]/20 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                      <button 
+                        onClick={() => onPlayVideo && onPlayVideo({
+                          url: playlist.url,
+                          title: playlist.title
+                        })}
+                        className="w-10 h-10 rounded-lg bg-[#EA4335]/20 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform hover:bg-[#EA4335]/40 cursor-pointer"
+                        title="Play with AI Companion"
+                      >
                         <Play className="w-5 h-5 text-[#EA4335]" />
-                      </div>
+                      </button>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-white group-hover:text-[#EA4335] transition-colors line-clamp-1">
+                        <a
+                          href={playlist.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-sm text-white hover:text-[#EA4335] transition-colors line-clamp-1 cursor-pointer underline-offset-2 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           {playlist.title}
-                        </div>
+                        </a>
                         <div className="text-xs text-white/50 mt-1">
                           {playlist.channel && `${playlist.channel} • `}
-                          {playlist.estimated_duration || "Video Series"}
+                          {playlist.estimated_duration || "Video Tutorial"}
                         </div>
+                        <a 
+                          href={playlist.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-[#EA4335]/70 hover:text-[#EA4335] mt-1 inline-block truncate max-w-full"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {playlist.url}
+                        </a>
                       </div>
-                      <ExternalLink className="w-4 h-4 text-white/30 group-hover:text-[#EA4335] flex-shrink-0" />
+                      <div className="flex flex-col gap-1 flex-shrink-0">
+                        <a
+                          href={playlist.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded hover:bg-white/10 transition-colors"
+                          title="Open in YouTube"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-4 h-4 text-white/30 hover:text-[#EA4335]" />
+                        </a>
+                        <button
+                          onClick={() => onPlayVideo && onPlayVideo({
+                            url: playlist.url,
+                            title: playlist.title
+                          })}
+                          className="p-1.5 rounded hover:bg-white/10 transition-colors"
+                          title="Watch with AI Companion"
+                        >
+                          <MessageSquare className="w-4 h-4 text-white/30 hover:text-[#667eea]" />
+                        </button>
+                      </div>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
