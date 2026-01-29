@@ -339,16 +339,63 @@ Let's learn together! 🚀`
             </div>
             <div>
               <h2 className="text-lg font-bold">{videoTitle}</h2>
-              <p className="text-xs text-white/50">AI-Powered Video Learning</p>
+              <div className="flex items-center gap-3 text-xs text-white/50">
+                <span>AI-Powered Video Learning</span>
+                {aiWatching && (
+                  <div className="flex items-center gap-1 text-[#34A853]">
+                    <Eye className="w-3 h-3 animate-pulse" />
+                    <span>AI Watching</span>
+                  </div>
+                )}
+                {transcript && (
+                  <div className="flex items-center gap-1 text-[#667eea]">
+                    <CheckCircle className="w-3 h-3" />
+                    <span>Transcript Loaded</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAiWatching(!aiWatching)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                aiWatching 
+                  ? "bg-[#34A853]/20 text-[#34A853] border border-[#34A853]/30" 
+                  : "bg-white/5 text-white/50 border border-white/10"
+              }`}
+            >
+              {aiWatching ? "👁️ Watching" : "Paused"}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+
+        {/* Proactive Help Banner */}
+        {proactiveHelp && (
+          <div className={`p-3 border-b flex items-start gap-3 animate-slideDown ${
+            proactiveHelp.severity === "high" 
+              ? "bg-[#EA4335]/10 border-[#EA4335]/30" 
+              : "bg-[#FBBC04]/10 border-[#FBBC04]/30"
+          }`}>
+            <Lightbulb className="w-5 h-5 text-[#FBBC04] flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="text-sm font-medium mb-1">AI Suggestion</div>
+              <div className="text-xs text-white/80">{proactiveHelp.message}</div>
+            </div>
+            <button
+              onClick={() => setProactiveHelp(null)}
+              className="p-1 rounded hover:bg-white/10"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
@@ -372,27 +419,69 @@ Let's learn together! 🚀`
               )}
             </div>
             
-            {/* Video Info */}
-            <div className="mt-4 p-3 bg-white/5 rounded-lg">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 text-[#34A853]">
-                    <Lightbulb className="w-4 h-4" />
-                    <span>Ask questions anytime</span>
+            {/* Video Controls & Quick Actions */}
+            <div className="mt-4 space-y-3">
+              {/* Info Bar */}
+              <div className="p-3 bg-white/5 rounded-lg">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-[#34A853]">
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Ask questions anytime</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[#667eea]">
+                      <Brain className="w-4 h-4" />
+                      <span>AI watching with you</span>
+                    </div>
+                    <div className="text-white/40">
+                      ⏱️ {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, '0')}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-[#667eea]">
-                    <MessageSquare className="w-4 h-4" />
-                    <span>AI is watching with you</span>
-                  </div>
+                  <a 
+                    href={videoUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-white/50 hover:text-white transition-colors"
+                  >
+                    Open in YouTube →
+                  </a>
                 </div>
-                <a 
-                  href={videoUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-xs text-white/50 hover:text-white transition-colors"
+              </div>
+
+              {/* Quick Action Buttons */}
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  onClick={() => getContextualHelp("explain")}
+                  disabled={isLoading}
+                  className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-xs font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
                 >
-                  Open in YouTube →
-                </a>
+                  <HelpCircle className="w-4 h-4 text-[#667eea]" />
+                  Explain This
+                </button>
+                <button
+                  onClick={() => getContextualHelp("example")}
+                  disabled={isLoading}
+                  className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-xs font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  <Target className="w-4 h-4 text-[#34A853]" />
+                  Example
+                </button>
+                <button
+                  onClick={() => getContextualHelp("deeper")}
+                  disabled={isLoading}
+                  className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-xs font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  <BookOpen className="w-4 h-4 text-[#FBBC04]" />
+                  Go Deeper
+                </button>
+                <button
+                  onClick={generateComprehensionCheck}
+                  disabled={isLoading}
+                  className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-xs font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  <Sparkles className="w-4 h-4 text-[#EA4335]" />
+                  Quiz Me
+                </button>
               </div>
             </div>
           </div>
@@ -403,12 +492,42 @@ Let's learn together! 🚀`
             <div className="p-4 border-b border-white/10">
               <h3 className="font-semibold flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-[#667eea]" />
-                Ask About This Video
+                AI Learning Companion
               </h3>
               <p className="text-xs text-white/50 mt-1">
-                I'm analyzing the video content to help you learn
+                {aiWatching ? "🔴 Live - Watching with you" : "Paused"}
               </p>
             </div>
+
+            {/* Comprehension Check Modal */}
+            {showComprehensionCheck && comprehensionQuestion && (
+              <div className="p-4 bg-[#667eea]/10 border-b border-[#667eea]/30 animate-slideDown">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#667eea]" />
+                    Quick Check
+                  </h4>
+                  <button
+                    onClick={() => setShowComprehensionCheck(false)}
+                    className="p-1 rounded hover:bg-white/10"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+                <div className="text-sm mb-3">{comprehensionQuestion.question}</div>
+                <div className="space-y-2">
+                  {Object.entries(comprehensionQuestion.options).map(([key, value]) => (
+                    <button
+                      key={key}
+                      onClick={() => handleComprehensionAnswer(key)}
+                      className="w-full p-2 text-left text-xs bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors"
+                    >
+                      <strong>{key}:</strong> {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -428,6 +547,9 @@ Let's learn together! 🚀`
                       <div className="prose prose-invert prose-sm max-w-none">
                         <ReactMarkdown
                           components={{
+                            h1: ({ children }) => <h1 className="text-lg font-bold mb-2 pb-2 border-b border-white/10">{children}</h1>,
+                            h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3">{children}</h2>,
+                            h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2">{children}</h3>,
                             p: ({ children }) => <p className="text-sm leading-relaxed mb-2 last:mb-0">{children}</p>,
                             strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
                             code: ({ inline, children }) => 
@@ -440,8 +562,14 @@ Let's learn together! 🚀`
                                   {children}
                                 </code>
                               ),
-                            ul: ({ children }) => <ul className="list-disc list-inside text-sm space-y-1 ml-2">{children}</ul>,
+                            ul: ({ children }) => <ul className="list-disc list-inside text-sm space-y-1 ml-2 mb-2">{children}</ul>,
+                            ol: ({ children }) => <ol className="list-decimal list-inside text-sm space-y-1 ml-2 mb-2">{children}</ol>,
                             li: ({ children }) => <li className="text-white/80">{children}</li>,
+                            blockquote: ({ children }) => (
+                              <blockquote className="border-l-4 border-[#667eea] pl-3 py-1 my-2 bg-[#667eea]/10 rounded-r text-sm italic">
+                                {children}
+                              </blockquote>
+                            ),
                           }}
                         >
                           {msg.content}
@@ -487,7 +615,7 @@ Let's learn together! 🚀`
                 </Button>
               </div>
               <div className="mt-2 text-xs text-white/40">
-                💡 Tip: Pause the video to ask detailed questions
+                💡 Tip: AI is watching - ask about what you just saw!
               </div>
             </div>
           </div>
