@@ -777,6 +777,346 @@ print(result)"""
         
         return success, response
 
+    # ============== NEW MOLTBOT INTEGRATION TESTS ==============
+    
+    def test_video_transcript(self):
+        """Test YouTube video transcript fetching API"""
+        # Test with a known YouTube video ID
+        test_video_ids = [
+            "dQw4w9WgXcQ",  # Rick Astley - Never Gonna Give You Up (commonly used for testing)
+            "jNQXAC9IVRw"   # Another test video
+        ]
+        
+        all_passed = True
+        
+        for video_id in test_video_ids:
+            data = {
+                "video_id": video_id,
+                "language": "en"
+            }
+            
+            success, response = self.run_test(f"Video Transcript ({video_id})", "POST", "learning/video/transcript", 200, data, timeout=60)
+            
+            if not success:
+                all_passed = False
+            elif response:
+                # Check expected response structure
+                expected_keys = ["success", "video_id", "transcript", "full_text", "total_segments", "available"]
+                if all(key in response for key in expected_keys):
+                    if response.get("available"):
+                        print(f"   ✓ Transcript available: {response.get('total_segments', 0)} segments")
+                        print(f"   ✓ Full text length: {len(response.get('full_text', ''))}")
+                        
+                        # Check transcript structure
+                        transcript = response.get('transcript', [])
+                        if transcript and len(transcript) > 0:
+                            first_segment = transcript[0]
+                            if all(key in first_segment for key in ['start', 'duration', 'text']):
+                                print(f"   ✓ Transcript segments have proper timestamps")
+                            else:
+                                print(f"   ⚠️ Transcript segments missing required fields")
+                    else:
+                        print(f"   ⚠️ Transcript not available for this video (this is OK)")
+                else:
+                    print(f"   ⚠️ Missing expected response keys")
+                    all_passed = False
+        
+        return all_passed, {}
+
+    def test_video_contextual_help(self):
+        """Test contextual video help API"""
+        help_types = ["explain", "clarify", "example", "deeper"]
+        skill_levels = ["beginner", "intermediate", "advanced", "senior"]
+        
+        all_passed = True
+        
+        # Test different combinations
+        test_cases = [
+            ("beginner", "explain"),
+            ("intermediate", "example"),
+            ("advanced", "deeper"),
+            ("senior", "clarify")
+        ]
+        
+        for skill_level, help_type in test_cases:
+            data = {
+                "video_id": "dQw4w9WgXcQ",
+                "video_title": "Introduction to Programming Concepts",
+                "current_time": 120.5,
+                "transcript_segment": "In this section, we'll learn about variables and data types",
+                "skill_level": skill_level,
+                "help_type": help_type
+            }
+            
+            success, response = self.run_test(f"Video Contextual Help ({skill_level}, {help_type})", "POST", "learning/video/contextual-help", 200, data, timeout=60)
+            
+            if not success:
+                all_passed = False
+            elif response:
+                expected_keys = ["help", "timestamp", "video_id", "help_type"]
+                if all(key in response for key in expected_keys):
+                    help_content = response.get('help', '')
+                    if len(help_content) > 50:  # Reasonable response length
+                        print(f"   ✓ Structured markdown response received ({len(help_content)} chars)")
+                        
+                        # Check for markdown formatting
+                        if any(marker in help_content for marker in ['##', '**', '###', '🎯', '📖']):
+                            print(f"   ✓ Markdown formatting detected")
+                        else:
+                            print(f"   ⚠️ No markdown formatting detected")
+                    else:
+                        print(f"   ⚠️ Response too short")
+                        all_passed = False
+                else:
+                    print(f"   ⚠️ Missing expected response keys")
+                    all_passed = False
+        
+        return all_passed, {}
+
+    def test_video_proactive_analysis(self):
+        """Test proactive video analysis API"""
+        # Test normal and rewind scenarios
+        test_scenarios = [
+            {
+                "name": "Normal Playback",
+                "current_time": 300.0,
+                "last_pause_time": 250.0,
+                "watch_duration": 320.0
+            },
+            {
+                "name": "Rewound Video (Confusion Signal)",
+                "current_time": 200.0,
+                "last_pause_time": 280.0,  # User rewound from 280s to 200s
+                "watch_duration": 400.0
+            },
+            {
+                "name": "Frequent Pausing",
+                "current_time": 150.0,
+                "last_pause_time": 140.0,
+                "watch_duration": 300.0  # Much longer than current_time
+            }
+        ]
+        
+        all_passed = True
+        
+        for scenario in test_scenarios:
+            data = {
+                "video_id": "dQw4w9WgXcQ",
+                "video_title": "Advanced JavaScript Concepts",
+                "current_time": scenario["current_time"],
+                "last_pause_time": scenario["last_pause_time"],
+                "watch_duration": scenario["watch_duration"],
+                "skill_level": "intermediate",
+                "transcript_context": "Now we're going to discuss closures and their practical applications in modern JavaScript development"
+            }
+            
+            success, response = self.run_test(f"Proactive Analysis - {scenario['name']}", "POST", "learning/video/proactive-analysis", 200, data, timeout=45)
+            
+            if not success:
+                all_passed = False
+            elif response:
+                expected_keys = ["should_intervene", "reason", "proactive_message", "severity"]
+                if all(key in response for key in expected_keys):
+                    should_intervene = response.get('should_intervene')
+                    severity = response.get('severity')
+                    
+                    print(f"   ✓ Should intervene: {should_intervene}")
+                    print(f"   ✓ Severity: {severity}")
+                    
+                    # Check if rewind scenario correctly detects confusion
+                    if scenario["name"] == "Rewound Video (Confusion Signal)" and should_intervene:
+                        print(f"   ✓ Correctly detected rewind pattern")
+                    
+                    # Validate severity levels
+                    if severity in ["low", "medium", "high"]:
+                        print(f"   ✓ Valid severity level")
+                    else:
+                        print(f"   ⚠️ Invalid severity level: {severity}")
+                        all_passed = False
+                else:
+                    print(f"   ⚠️ Missing expected response keys")
+                    all_passed = False
+        
+        return all_passed, {}
+
+    def test_video_comprehension_check(self):
+        """Test video comprehension check API"""
+        test_topics = [
+            "JavaScript Closures and Scope",
+            "Python List Comprehensions", 
+            "React Component Lifecycle",
+            "Database Normalization"
+        ]
+        
+        skill_levels = ["beginner", "intermediate", "advanced", "senior"]
+        all_passed = True
+        
+        for i, topic in enumerate(test_topics):
+            skill_level = skill_levels[i % len(skill_levels)]
+            
+            data = {
+                "video_id": "dQw4w9WgXcQ",
+                "video_title": f"Learning {topic}",
+                "topic_covered": topic,
+                "skill_level": skill_level
+            }
+            
+            success, response = self.run_test(f"Comprehension Check - {topic} ({skill_level})", "POST", "learning/video/comprehension-check", 200, data, timeout=45)
+            
+            if not success:
+                all_passed = False
+            elif response:
+                expected_keys = ["question", "options", "correct_answer", "explanation"]
+                if all(key in response for key in expected_keys):
+                    options = response.get('options', {})
+                    correct_answer = response.get('correct_answer')
+                    
+                    # Validate options structure (A, B, C, D)
+                    if all(key in options for key in ['A', 'B', 'C', 'D']):
+                        print(f"   ✓ All 4 options (A/B/C/D) present")
+                    else:
+                        print(f"   ⚠️ Missing option keys: {list(options.keys())}")
+                        all_passed = False
+                    
+                    # Validate correct answer
+                    if correct_answer in ['A', 'B', 'C', 'D']:
+                        print(f"   ✓ Valid correct answer: {correct_answer}")
+                    else:
+                        print(f"   ⚠️ Invalid correct answer: {correct_answer}")
+                        all_passed = False
+                    
+                    # Check question relevance
+                    question = response.get('question', '')
+                    if len(question) > 20 and any(word in question.lower() for word in topic.lower().split()):
+                        print(f"   ✓ Question relevant to topic")
+                    else:
+                        print(f"   ⚠️ Question may not be relevant to topic")
+                else:
+                    print(f"   ⚠️ Missing expected response keys")
+                    all_passed = False
+        
+        return all_passed, {}
+
+    def test_moltbot_chat(self):
+        """Test Moltbot multi-agent chat API"""
+        # Test different agent modes and thinking modes
+        agent_modes = ["general", "research", "coding", "creative", "learning", "business"]
+        thinking_modes = ["normal", "extended", "senior_engineer"]
+        
+        all_passed = True
+        
+        # Test each agent mode
+        for agent_mode in agent_modes:
+            data = {
+                "message": f"Help me understand the best practices for {agent_mode} work",
+                "agent_mode": agent_mode,
+                "conversation_history": [
+                    {"role": "user", "content": "Hello, I need some guidance"},
+                    {"role": "assistant", "content": f"I'm the {agent_mode} agent, happy to help!"}
+                ],
+                "session_id": f"test_session_{agent_mode}",
+                "thinking_mode": "normal",
+                "skill_level": "intermediate"
+            }
+            
+            success, response = self.run_test(f"Moltbot Chat - {agent_mode.title()} Agent", "POST", "moltbot/chat", 200, data, timeout=60)
+            
+            if not success:
+                all_passed = False
+            elif response:
+                expected_keys = ["response", "agent_mode", "agent_config", "thinking_mode", "session_id"]
+                if all(key in response for key in expected_keys):
+                    agent_response = response.get('response', '')
+                    agent_config = response.get('agent_config', {})
+                    
+                    if len(agent_response) > 50:
+                        print(f"   ✓ Agent response received ({len(agent_response)} chars)")
+                    else:
+                        print(f"   ⚠️ Response too short")
+                        all_passed = False
+                    
+                    # Check agent config
+                    if 'role' in agent_config and 'capabilities' in agent_config:
+                        print(f"   ✓ Agent config: {agent_config.get('role', 'N/A')}")
+                    else:
+                        print(f"   ⚠️ Missing agent config details")
+                        all_passed = False
+                else:
+                    print(f"   ⚠️ Missing expected response keys")
+                    all_passed = False
+        
+        # Test senior engineer thinking mode specifically
+        data = {
+            "message": "How should I architect a scalable microservices system?",
+            "agent_mode": "coding",
+            "conversation_history": [],
+            "session_id": "test_session_senior",
+            "thinking_mode": "senior_engineer",
+            "skill_level": "senior"
+        }
+        
+        success, response = self.run_test("Moltbot Chat - Senior Engineer Mode", "POST", "moltbot/chat", 200, data, timeout=90)
+        
+        if success and response:
+            agent_response = response.get('response', '')
+            
+            # Check for senior engineer thinking patterns
+            senior_indicators = ['trade-off', 'scalability', 'architecture', 'production', 'reasoning', 'consider']
+            found_indicators = sum(1 for indicator in senior_indicators if indicator.lower() in agent_response.lower())
+            
+            if found_indicators >= 2:
+                print(f"   ✓ Senior engineer reasoning detected ({found_indicators} indicators)")
+            else:
+                print(f"   ⚠️ Limited senior engineer reasoning ({found_indicators} indicators)")
+                all_passed = False
+        else:
+            all_passed = False
+        
+        return all_passed, {}
+
+    def test_moltbot_status(self):
+        """Test Moltbot status/health API"""
+        success, response = self.run_test("Moltbot Status", "GET", "moltbot/status", 200, timeout=30)
+        
+        if success and response:
+            expected_keys = ["gateway", "version", "features", "agents", "timestamp"]
+            if all(key in response for key in expected_keys):
+                gateway_status = response.get('gateway')
+                version = response.get('version')
+                features = response.get('features', {})
+                agents = response.get('agents', [])
+                
+                print(f"   ✓ Gateway status: {gateway_status}")
+                print(f"   ✓ Version: {version}")
+                print(f"   ✓ Features: {len(features)} feature flags")
+                print(f"   ✓ Agents: {len(agents)} agents available")
+                
+                # Check feature flags
+                expected_features = ["multi_agent", "senior_thinking", "video_mentoring", "real_time_help", "transcript_analysis"]
+                for feature in expected_features:
+                    if feature in features:
+                        print(f"   ✓ Feature {feature}: {features[feature]}")
+                    else:
+                        print(f"   ⚠️ Missing feature flag: {feature}")
+                
+                # Check agents
+                expected_agent_count = 6
+                if len(agents) == expected_agent_count:
+                    print(f"   ✓ All {expected_agent_count} agents present")
+                    
+                    # Check agent status
+                    ready_agents = sum(1 for agent in agents if agent.get('status') == 'ready')
+                    if ready_agents == expected_agent_count:
+                        print(f"   ✓ All agents ready")
+                    else:
+                        print(f"   ⚠️ Only {ready_agents}/{expected_agent_count} agents ready")
+                else:
+                    print(f"   ⚠️ Expected {expected_agent_count} agents, found {len(agents)}")
+            else:
+                print(f"   ⚠️ Missing expected response keys")
+        
+        return success, response
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting Live Code Mentor API Tests")
