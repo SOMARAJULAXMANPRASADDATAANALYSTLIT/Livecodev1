@@ -69,6 +69,20 @@ const Header = ({ mode, onModeChange }) => {
             <span className="hidden md:inline">Moltbot</span>
           </button>
           <button
+            data-testid="mode-moltbot-full-btn"
+            onClick={() => onModeChange("moltbot-full")}
+            className={`
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap
+              ${mode === "moltbot-full" 
+                ? "mode-active text-white bg-gradient-to-r from-[#EA4335]/20 to-[#FBBC04]/20" 
+                : "text-white/60 hover:text-white hover:bg-white/5"
+              }
+            `}
+          >
+            <span className="text-base">🦞✨</span>
+            <span className="hidden md:inline">Moltbot Full</span>
+          </button>
+          <button
             data-testid="mode-news-btn"
             onClick={() => onModeChange("news")}
             className={`
