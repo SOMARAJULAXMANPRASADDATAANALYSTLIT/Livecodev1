@@ -682,6 +682,7 @@ const EditableLearningPath = ({ skillTree, userProfile, onUpdateTree }) => {
             setCurrentVideo(null);
           }}
           skillLevel={userProfile?.experience || "intermediate"}
+          onUpdateVideoUrl={(videoData) => handleUpdateVideoUrl(currentVideo.topicId, videoData)}
         />
       )}
     </div>
