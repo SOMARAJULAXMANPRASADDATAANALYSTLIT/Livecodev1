@@ -12,7 +12,7 @@ import ReactMarkdown from "react-markdown";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-const VideoLearningModal = ({ videoUrl, videoTitle, onClose, skillLevel = "intermediate" }) => {
+const VideoLearningModal = ({ videoUrl, videoTitle, onClose, skillLevel = "intermediate", onUpdateVideoUrl }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -27,8 +27,16 @@ const VideoLearningModal = ({ videoUrl, videoTitle, onClose, skillLevel = "inter
   const [proactiveHelp, setProactiveHelp] = useState(null);
   const [showComprehensionCheck, setShowComprehensionCheck] = useState(false);
   const [comprehensionQuestion, setComprehensionQuestion] = useState(null);
+  const [showAddUrl, setShowAddUrl] = useState(false);
+  const [newVideoUrl, setNewVideoUrl] = useState("");
+  const [urlPreview, setUrlPreview] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState(null);
+  const [conversationContext, setConversationContext] = useState([]);
   const iframeRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const dropZoneRef = useRef(null);
   const watchStartTime = useRef(Date.now());
 
   // Extract YouTube video ID
