@@ -3982,6 +3982,75 @@ FORMAT AS JSON:
         logger.error(f"Comprehension check error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class ScreenshotAnalysisRequest(BaseModel):
+    image_base64: str
+    video_title: str
+    current_time: float = 0
+    skill_level: str = "intermediate"
+    transcript_context: Optional[str] = None
+    conversation_history: List[Dict] = []
+
+@api_router.post("/learning/video/analyze-screenshot")
+async def analyze_video_screenshot(request: ScreenshotAnalysisRequest):
+    """Analyze a screenshot from a video learning session with full context"""
+    try:
+        skill_context = get_skill_context(request.skill_level)
+        
+        # Build conversation context
+        context_summary = ""
+        if request.conversation_history:
+            context_summary = "\n".join([
+                f"- {item.get('type', 'interaction')}: {item.get('summary', '')[:100]}"
+                for item in request.conversation_history[-5:]
+            ])
+        
+        system_prompt = f"""You are an AI learning companion analyzing a screenshot from a video tutorial.
+
+VIDEO: {request.video_title}
+TIMESTAMP: {int(request.current_time)} seconds into video
+
+{skill_context}
+
+TRANSCRIPT CONTEXT (what was being said):
+{request.transcript_context or "Not available"}
+
+PREVIOUS CONVERSATION:
+{context_summary or "New session"}
+
+ANALYZE THE SCREENSHOT:
+1. Identify what's being shown (code, diagram, UI, concept explanation, etc.)
+2. Explain what you see in context of the video topic
+3. Highlight key concepts visible
+4. Offer to explain anything confusing
+5. Connect it to what was being said in the transcript
+
+Be specific to what you see. Help the student understand the visual content in relation to the learning material."""
+
+        chat = get_chat_instance(system_prompt, model_type="fast")
+        
+        # Send image with context
+        user_msg = UserMessage(
+            text=f"Please analyze this screenshot from the video '{request.video_title}' taken at {int(request.current_time)} seconds. What do you see and how does it relate to what's being taught?",
+            image=request.image_base64
+        )
+        
+        response = await chat.send_message(user_msg)
+        
+        return {
+            "success": True,
+            "analysis": response,
+            "timestamp": request.current_time,
+            "video_title": request.video_title
+        }
+        
+    except Exception as e:
+        logger.error(f"Screenshot analysis error: {e}")
+        return {
+            "success": False,
+            "analysis": f"I can see you've shared a screenshot from '{request.video_title}'. Could you tell me what specific part you'd like me to explain?",
+            "error": str(e)
+        }
+
 # ============== MOLTBOT MULTI-AGENT SYSTEM ==============
 
 class MoltbotChatRequest(BaseModel):
