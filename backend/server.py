@@ -4150,6 +4150,363 @@ async def moltbot_status(session_id: Optional[str] = None):
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
+# ============== CUSTOM LEARNING PATH MANAGEMENT ==============
+# Allow users to create, edit, and manage their own learning topics and videos
+
+# Collection for custom learning paths
+custom_learning_paths_collection = db.custom_learning_paths
+
+class CreateCustomTopicRequest(BaseModel):
+    path_id: str  # The learning path this topic belongs to
+    parent_id: Optional[str] = None  # Parent topic ID (for nested topics)
+    name: str
+    description: Optional[str] = ""
+    level: str = "beginner"
+    estimated_time: Optional[str] = "1-2 hours"
+    youtube_url: Optional[str] = None
+
+class UpdateTopicRequest(BaseModel):
+    topic_id: str
+    name: Optional[str] = None
+    description: Optional[str] = None
+    youtube_url: Optional[str] = None
+    status: Optional[str] = None  # not_started, in_progress, completed
+
+class AddYoutubeToTopicRequest(BaseModel):
+    topic_id: str
+    youtube_url: str
+    title: Optional[str] = None
+
+class CreateLearningPathRequest(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    career_goal: Optional[str] = ""
+
+@api_router.post("/learning/paths/create")
+async def create_custom_learning_path(request: CreateLearningPathRequest):
+    """Create a new custom learning path"""
+    try:
+        path_id = str(uuid.uuid4())
+        
+        path_data = {
+            "path_id": path_id,
+            "name": request.name,
+            "description": request.description,
+            "career_goal": request.career_goal,
+            "topics": [],  # Start with empty topics
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await custom_learning_paths_collection.insert_one(path_data)
+        
+        return {
+            "success": True,
+            "path_id": path_id,
+            "path": {
+                "path_id": path_id,
+                "name": request.name,
+                "description": request.description,
+                "topics": []
+            }
+        }
+    except Exception as e:
+        logger.error(f"Create learning path error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/learning/paths")
+async def get_custom_learning_paths():
+    """Get all custom learning paths"""
+    try:
+        paths = await custom_learning_paths_collection.find({}, {"_id": 0}).to_list(100)
+        return {"paths": paths}
+    except Exception as e:
+        logger.error(f"Get learning paths error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/learning/paths/{path_id}")
+async def get_custom_learning_path(path_id: str):
+    """Get a specific custom learning path"""
+    try:
+        path = await custom_learning_paths_collection.find_one({"path_id": path_id}, {"_id": 0})
+        if not path:
+            raise HTTPException(status_code=404, detail="Learning path not found")
+        return path
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get learning path error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/learning/paths/{path_id}/topics")
+async def add_topic_to_path(path_id: str, request: CreateCustomTopicRequest):
+    """Add a new topic to a learning path"""
+    try:
+        topic_id = str(uuid.uuid4())
+        
+        # Extract YouTube video ID if URL provided
+        video_id = None
+        if request.youtube_url:
+            if "youtube.com/watch?v=" in request.youtube_url:
+                video_id = request.youtube_url.split("watch?v=")[1].split("&")[0]
+            elif "youtu.be/" in request.youtube_url:
+                video_id = request.youtube_url.split("youtu.be/")[1].split("?")[0]
+        
+        new_topic = {
+            "id": topic_id,
+            "name": request.name,
+            "description": request.description,
+            "level": request.level,
+            "estimated_time": request.estimated_time,
+            "status": "not_started",
+            "parent_id": request.parent_id,
+            "youtube_url": request.youtube_url,
+            "video_id": video_id,
+            "children": [],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Add topic to the path
+        if request.parent_id:
+            # Add as child of parent topic - need to find and update nested
+            path = await custom_learning_paths_collection.find_one({"path_id": path_id})
+            if not path:
+                raise HTTPException(status_code=404, detail="Learning path not found")
+            
+            def add_to_parent(topics, parent_id, new_topic):
+                for topic in topics:
+                    if topic["id"] == parent_id:
+                        if "children" not in topic:
+                            topic["children"] = []
+                        topic["children"].append(new_topic)
+                        return True
+                    if "children" in topic and add_to_parent(topic["children"], parent_id, new_topic):
+                        return True
+                return False
+            
+            topics = path.get("topics", [])
+            add_to_parent(topics, request.parent_id, new_topic)
+            
+            await custom_learning_paths_collection.update_one(
+                {"path_id": path_id},
+                {"$set": {"topics": topics, "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+        else:
+            # Add as root level topic
+            await custom_learning_paths_collection.update_one(
+                {"path_id": path_id},
+                {
+                    "$push": {"topics": new_topic},
+                    "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+                }
+            )
+        
+        return {
+            "success": True,
+            "topic": new_topic
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Add topic error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/learning/topics/{topic_id}")
+async def update_topic(topic_id: str, request: UpdateTopicRequest):
+    """Update a topic (name, description, status, youtube_url)"""
+    try:
+        # Build update data
+        update_data = {}
+        if request.name is not None:
+            update_data["name"] = request.name
+        if request.description is not None:
+            update_data["description"] = request.description
+        if request.status is not None:
+            update_data["status"] = request.status
+        if request.youtube_url is not None:
+            update_data["youtube_url"] = request.youtube_url
+            # Extract video ID
+            if "youtube.com/watch?v=" in request.youtube_url:
+                update_data["video_id"] = request.youtube_url.split("watch?v=")[1].split("&")[0]
+            elif "youtu.be/" in request.youtube_url:
+                update_data["video_id"] = request.youtube_url.split("youtu.be/")[1].split("?")[0]
+        
+        # Find and update the topic in all paths
+        paths = await custom_learning_paths_collection.find({}).to_list(100)
+        
+        def update_in_topics(topics, topic_id, update_data):
+            for topic in topics:
+                if topic["id"] == topic_id:
+                    topic.update(update_data)
+                    return True
+                if "children" in topic and update_in_topics(topic["children"], topic_id, update_data):
+                    return True
+            return False
+        
+        updated = False
+        for path in paths:
+            topics = path.get("topics", [])
+            if update_in_topics(topics, topic_id, update_data):
+                await custom_learning_paths_collection.update_one(
+                    {"path_id": path["path_id"]},
+                    {"$set": {"topics": topics, "updated_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                updated = True
+                break
+        
+        if not updated:
+            raise HTTPException(status_code=404, detail="Topic not found")
+        
+        return {"success": True, "updated": update_data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update topic error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/learning/topics/{topic_id}")
+async def delete_topic(topic_id: str):
+    """Delete a topic from learning path"""
+    try:
+        paths = await custom_learning_paths_collection.find({}).to_list(100)
+        
+        def remove_from_topics(topics, topic_id):
+            for i, topic in enumerate(topics):
+                if topic["id"] == topic_id:
+                    topics.pop(i)
+                    return True
+                if "children" in topic and remove_from_topics(topic["children"], topic_id):
+                    return True
+            return False
+        
+        deleted = False
+        for path in paths:
+            topics = path.get("topics", [])
+            if remove_from_topics(topics, topic_id):
+                await custom_learning_paths_collection.update_one(
+                    {"path_id": path["path_id"]},
+                    {"$set": {"topics": topics, "updated_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                deleted = True
+                break
+        
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Topic not found")
+        
+        return {"success": True, "deleted": topic_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete topic error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/learning/topics/{topic_id}/youtube")
+async def add_youtube_to_topic(topic_id: str, request: AddYoutubeToTopicRequest):
+    """Add or update YouTube video for a topic"""
+    try:
+        # Extract video ID
+        video_id = None
+        if "youtube.com/watch?v=" in request.youtube_url:
+            video_id = request.youtube_url.split("watch?v=")[1].split("&")[0]
+        elif "youtu.be/" in request.youtube_url:
+            video_id = request.youtube_url.split("youtu.be/")[1].split("?")[0]
+        
+        if not video_id:
+            raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+        
+        # Get video info via oEmbed API (no API key needed)
+        import urllib.request
+        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        
+        video_title = request.title
+        thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+        
+        try:
+            with urllib.request.urlopen(oembed_url, timeout=5) as response:
+                oembed_data = json.loads(response.read().decode())
+                video_title = video_title or oembed_data.get("title", "YouTube Video")
+        except:
+            video_title = video_title or "YouTube Video"
+        
+        update_data = {
+            "youtube_url": f"https://www.youtube.com/watch?v={video_id}",
+            "video_id": video_id,
+            "video_title": video_title,
+            "thumbnail_url": thumbnail_url
+        }
+        
+        # Update the topic
+        paths = await custom_learning_paths_collection.find({}).to_list(100)
+        
+        def update_in_topics(topics, topic_id, update_data):
+            for topic in topics:
+                if topic["id"] == topic_id:
+                    topic.update(update_data)
+                    return True
+                if "children" in topic and update_in_topics(topic["children"], topic_id, update_data):
+                    return True
+            return False
+        
+        updated = False
+        for path in paths:
+            topics = path.get("topics", [])
+            if update_in_topics(topics, topic_id, update_data):
+                await custom_learning_paths_collection.update_one(
+                    {"path_id": path["path_id"]},
+                    {"$set": {"topics": topics, "updated_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                updated = True
+                break
+        
+        if not updated:
+            raise HTTPException(status_code=404, detail="Topic not found")
+        
+        return {
+            "success": True,
+            "video_id": video_id,
+            "video_title": video_title,
+            "thumbnail_url": thumbnail_url,
+            "youtube_url": f"https://www.youtube.com/watch?v={video_id}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Add YouTube to topic error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/learning/youtube/preview/{video_id}")
+async def get_youtube_preview(video_id: str):
+    """Get YouTube video preview info"""
+    try:
+        import urllib.request
+        
+        oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+        
+        try:
+            with urllib.request.urlopen(oembed_url, timeout=5) as response:
+                oembed_data = json.loads(response.read().decode())
+                return {
+                    "success": True,
+                    "video_id": video_id,
+                    "title": oembed_data.get("title", "YouTube Video"),
+                    "author_name": oembed_data.get("author_name", "Unknown"),
+                    "thumbnail_url": f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+                    "embed_url": f"https://www.youtube-nocookie.com/embed/{video_id}"
+                }
+        except Exception as e:
+            # Fallback with basic info
+            return {
+                "success": True,
+                "video_id": video_id,
+                "title": "YouTube Video",
+                "author_name": "Unknown",
+                "thumbnail_url": f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+                "embed_url": f"https://www.youtube-nocookie.com/embed/{video_id}"
+            }
+    except Exception as e:
+        logger.error(f"YouTube preview error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Include the router
 app.include_router(api_router)
 
