@@ -8,6 +8,7 @@ import IDEView from "./components/IDEView";
 import AgentsView from "./components/AgentsView";
 import LearningPathView from "./components/LearningPathView";
 import AINewsFeed from "./components/AINewsFeed";
+import MoltbotView from "./components/MoltbotView";
 import { MentorProvider } from "./contexts/MentorContext";
 
 function App() {
@@ -32,6 +33,10 @@ function App() {
               <IDEView />
             ) : mode === "code" ? (
               <CodeLearningView />
+            ) : mode === "moltbot" ? (
+              <div className="max-w-5xl mx-auto">
+                <MoltbotView />
+              </div>
             ) : (
               <EnglishChatView />
             )}
