@@ -1050,10 +1050,12 @@ const RoadmapPhase = ({ skillTree, setSkillTree, weeklyPlan, progress, userProfi
           </div>
         )}
 
-        {/* Skill tree */}
-        <div className="space-y-2">
-          {skillTree?.nodes?.map(node => renderTreeNode(node))}
-        </div>
+        {/* Editable Skill tree - Add your own topics and YouTube URLs */}
+        <EditableLearningPath 
+          skillTree={skillTree}
+          userProfile={userProfile}
+          onUpdateTree={handleUpdateTree}
+        />
       </div>
 
       {/* Right - Weekly Plan */}
