@@ -527,18 +527,19 @@ GitHub: [moltbot/moltbot](https://github.com/moltbot/moltbot)`
         business: "business"
       };
       
-      const response = await fetch(`${BACKEND_URL}/api/agent/chat`, {
+      const response = await fetch(`${BACKEND_URL}/api/moltbot/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          agent_type: agentTypeMap[currentMode.id] || "coding",
           message: currentInput,
+          agent_mode: currentMode.id,
           conversation_history: messages.slice(-10).map(m => ({
             role: m.role,
             content: m.content
           })),
-          mode: currentMode.id,
-          model: currentModel.id
+          session_id: sessionId,
+          thinking_mode: currentMode.id === "coding" ? "senior_engineer" : "normal",
+          skill_level: "intermediate"
         })
       });
       
