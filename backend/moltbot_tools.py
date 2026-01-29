@@ -393,58 +393,96 @@ class BrowserTool:
     def __init__(self):
         self.playwright = None
         self.browser: Optional[Browser] = None
+        self.context = None
         self.page: Optional[Page] = None
         self.is_running = False
+        self._lock = asyncio.Lock()
     
-    async def start(self) -> Dict[str, Any]:
+    async def start(self, headless: bool = True) -> Dict[str, Any]:
         """Start browser instance"""
-        if self.is_running:
-            return {"status": "already_running"}
-        
-        try:
-            self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch(headless=True)
-            self.page = await self.browser.new_page()
-            self.is_running = True
+        async with self._lock:
+            if self.is_running:
+                return {"status": "already_running", "url": self.page.url if self.page else None}
             
-            return {
-                "status": "started",
-                "headless": True
-            }
-        except Exception as e:
-            logger.error(f"Browser start error: {e}")
-            return {"error": str(e)}
+            try:
+                self.playwright = await async_playwright().start()
+                
+                # Launch browser with proper configuration
+                self.browser = await self.playwright.chromium.launch(
+                    headless=headless,
+                    args=[
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-blink-features=AutomationControlled'
+                    ]
+                )
+                
+                # Create context with realistic settings
+                self.context = await self.browser.new_context(
+                    viewport={'width': 1920, 'height': 1080},
+                    user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                )
+                
+                self.page = await self.context.new_page()
+                self.is_running = True
+                
+                return {
+                    "status": "started",
+                    "headless": headless,
+                    "message": "Browser started successfully"
+                }
+            except Exception as e:
+                logger.error(f"Browser start error: {e}")
+                return {"error": str(e), "status": "error"}
     
     async def stop(self) -> Dict[str, Any]:
         """Stop browser instance"""
-        if not self.is_running:
-            return {"status": "not_running"}
-        
-        try:
-            if self.page:
-                await self.page.close()
-            if self.browser:
-                await self.browser.close()
-            if self.playwright:
-                await self.playwright.stop()
+        async with self._lock:
+            if not self.is_running:
+                return {"status": "not_running"}
             
-            self.is_running = False
-            return {"status": "stopped"}
-        except Exception as e:
-            return {"error": str(e)}
+            try:
+                if self.page:
+                    await self.page.close()
+                if self.context:
+                    await self.context.close()
+                if self.browser:
+                    await self.browser.close()
+                if self.playwright:
+                    await self.playwright.stop()
+                
+                self.is_running = False
+                self.page = None
+                self.context = None
+                self.browser = None
+                self.playwright = None
+                
+                return {"status": "stopped", "message": "Browser stopped successfully"}
+            except Exception as e:
+                logger.error(f"Browser stop error: {e}")
+                return {"error": str(e)}
     
     async def navigate(self, url: str) -> Dict[str, Any]:
         """Navigate to URL"""
         if not self.is_running:
-            await self.start()
+            # Auto-start browser
+            start_result = await self.start()
+            if "error" in start_result:
+                return start_result
         
         try:
-            await self.page.goto(url, wait_until="networkidle")
+            response = await self.page.goto(url, wait_until="networkidle", timeout=30000)
+            title = await self.page.title()
+            
             return {
                 "url": url,
-                "title": await self.page.title()
+                "title": title,
+                "status": response.status if response else 200,
+                "message": f"Navigated to {url}"
             }
         except Exception as e:
+            logger.error(f"Navigation error: {e}")
             return {"error": str(e)}
     
     async def screenshot(self, full_page: bool = False) -> Dict[str, Any]:
@@ -458,9 +496,12 @@ class BrowserTool:
             
             return {
                 "path": screenshot_path,
-                "full_page": full_page
+                "full_page": full_page,
+                "message": "Screenshot saved",
+                "url": self.page.url
             }
         except Exception as e:
+            logger.error(f"Screenshot error: {e}")
             return {"error": str(e)}
     
     async def click(self, selector: str) -> Dict[str, Any]:
@@ -469,10 +510,15 @@ class BrowserTool:
             return {"error": "Browser not running"}
         
         try:
-            await self.page.click(selector)
-            return {"selector": selector, "action": "clicked"}
+            await self.page.click(selector, timeout=10000)
+            return {
+                "selector": selector,
+                "action": "clicked",
+                "message": f"Clicked {selector}"
+            }
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Click error: {e}")
+            return {"error": str(e), "selector": selector}
     
     async def type_text(self, selector: str, text: str) -> Dict[str, Any]:
         """Type text into element"""
@@ -481,8 +527,13 @@ class BrowserTool:
         
         try:
             await self.page.fill(selector, text)
-            return {"selector": selector, "text": text}
+            return {
+                "selector": selector,
+                "text": text,
+                "message": f"Typed into {selector}"
+            }
         except Exception as e:
+            logger.error(f"Type error: {e}")
             return {"error": str(e)}
     
     async def get_content(self) -> Dict[str, Any]:
@@ -497,16 +548,35 @@ class BrowserTool:
             return {
                 "html": content[:10000],  # Truncate
                 "text": text[:5000],
-                "url": self.page.url
+                "url": self.page.url,
+                "title": await self.page.title()
             }
         except Exception as e:
+            logger.error(f"Get content error: {e}")
+            return {"error": str(e)}
+    
+    async def evaluate(self, expression: str) -> Dict[str, Any]:
+        """Execute JavaScript"""
+        if not self.is_running or not self.page:
+            return {"error": "Browser not running"}
+        
+        try:
+            result = await self.page.evaluate(expression)
+            return {
+                "expression": expression,
+                "result": result,
+                "message": "JavaScript executed"
+            }
+        except Exception as e:
+            logger.error(f"Evaluate error: {e}")
             return {"error": str(e)}
     
     async def status(self) -> Dict[str, Any]:
         """Get browser status"""
         return {
             "running": self.is_running,
-            "url": self.page.url if self.is_running and self.page else None
+            "url": self.page.url if self.is_running and self.page else None,
+            "title": await self.page.title() if self.is_running and self.page else None
         }
 
 # Global browser instance
