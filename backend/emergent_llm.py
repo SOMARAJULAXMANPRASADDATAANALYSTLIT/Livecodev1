@@ -27,10 +27,11 @@ class EmergentLLMClient:
         
         if not self.api_key:
             logger.warning("No Emergent LLM key configured")
-            return
         
-        if EMERGENT_AVAILABLE:
+        if self.api_key and EMERGENT_AVAILABLE:
             self._initialize_clients()
+        
+        logger.info(f"EmergentLLMClient initialized. Key present: {bool(self.api_key)}, Available: {EMERGENT_AVAILABLE}")
     
     def _initialize_clients(self):
         """Initialize all provider clients with Emergent key"""

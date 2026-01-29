@@ -4660,6 +4660,20 @@ app.include_router(whatsapp_router)
 # ============== AI CHAT WITH EMERGENT LLM ==============
 
 from emergent_llm import emergent_llm_client
+from config_manager import config_manager
+
+# Initialize Emergent client with saved config
+def init_emergent_client():
+    """Initialize Emergent client from config"""
+    config = config_manager.get_config()
+    if config.emergent_llm_key:
+        from emergent_llm import EmergentLLMClient
+        global emergent_llm_client
+        emergent_llm_client = EmergentLLMClient(api_key=config.emergent_llm_key)
+        logger.info("Emergent LLM client initialized from config")
+
+# Initialize on startup
+init_emergent_client()
 
 ai_router = APIRouter(prefix="/api/ai", tags=["AI Chat"])
 
