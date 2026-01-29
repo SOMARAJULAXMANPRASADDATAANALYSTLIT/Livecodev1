@@ -213,7 +213,7 @@ Let's learn together! 🚀`
           video_id: videoId,
           current_time: currentTime,
           skill_level: skillLevel,
-          has_transcript: transcript?.available || false
+          has_transcript: transcript !== null
         })
       });
 
@@ -234,6 +234,90 @@ Let's learn together! 🚀`
       }]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const getContextualHelp = async (helpType = "explain") => {
+    setIsLoading(true);
+    
+    // Find current transcript segment
+    const currentSegment = transcriptSegments.find(seg => 
+      currentTime >= seg.start && currentTime <= seg.start + seg.duration
+    );
+    
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/learning/video/contextual-help`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          video_id: videoId,
+          video_title: videoTitle,
+          current_time: currentTime,
+          transcript_segment: currentSegment?.text || null,
+          skill_level: skillLevel,
+          help_type: helpType
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to get help");
+
+      const data = await response.json();
+      
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: data.help,
+        timestamp: currentTime
+      }]);
+      
+      toast.success("AI guidance provided!");
+    } catch (error) {
+      console.error("Contextual help error:", error);
+      toast.error("Failed to get contextual help");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const generateComprehensionCheck = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/learning/video/comprehension-check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          video_id: videoId,
+          video_title: videoTitle,
+          topic_covered: videoTitle,
+          skill_level: skillLevel
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to generate question");
+
+      const data = await response.json();
+      setComprehensionQuestion(data);
+      setShowComprehensionCheck(true);
+      toast.success("Comprehension check ready!");
+    } catch (error) {
+      console.error("Comprehension check error:", error);
+      toast.error("Failed to generate question");
+    }
+  };
+
+  const handleComprehensionAnswer = (selected) => {
+    if (!comprehensionQuestion) return;
+    
+    const isCorrect = selected === comprehensionQuestion.correct_answer;
+    
+    setMessages(prev => [...prev, {
+      role: "assistant",
+      content: `## ${isCorrect ? "✅ Correct!" : "❌ Not quite"}\n\n**Your answer:** ${selected}\n**Correct answer:** ${comprehensionQuestion.correct_answer}\n\n**Explanation:** ${comprehensionQuestion.explanation}`
+    }]);
+    
+    setShowComprehensionCheck(false);
+    setComprehensionQuestion(null);
+    
+    if (isCorrect) {
+      toast.success("Great job! You understand this concept!");
     }
   };
 
