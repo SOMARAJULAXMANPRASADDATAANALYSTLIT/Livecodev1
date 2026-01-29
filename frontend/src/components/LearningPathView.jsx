@@ -5,7 +5,7 @@ import {
   Circle, Clock, BarChart3, BookOpen, Lightbulb, Sparkles,
   User, Briefcase, Code, Stethoscope, Plane, Building,
   Download, RefreshCw, MessageSquare, Home, ArrowLeft, Trophy,
-  Flame, Star, Mic, MicOff, Image, X, Zap, TrendingUp, Youtube, ExternalLink
+  Flame, Star, Mic, MicOff, Image, X, Zap, TrendingUp, Youtube, ExternalLink, Link2
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
