@@ -842,68 +842,23 @@ const OnboardingPhase = ({ step, setStep, data, setData, onComplete, isLoading }
 };
 
 // Roadmap Phase Component
-const RoadmapPhase = ({ skillTree, weeklyPlan, progress, userProfile, onStartTopic, onViewDashboard, onGoHome, xp, level, streak, badges, onlineResources, onPlayVideo }) => {
-  const [expandedNodes, setExpandedNodes] = useState(new Set(["root"]));
+const RoadmapPhase = ({ skillTree, setSkillTree, weeklyPlan, progress, userProfile, onStartTopic, onViewDashboard, onGoHome, xp, level, streak, badges, onlineResources, onPlayVideo }) => {
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [currentVideo, setCurrentVideo] = useState(null);
 
-  const toggleNode = (nodeId) => {
-    setExpandedNodes(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(nodeId)) newSet.delete(nodeId);
-      else newSet.add(nodeId);
-      return newSet;
-    });
+  // Handle updating the skill tree from EditableLearningPath
+  const handleUpdateTree = (updatedTree) => {
+    setSkillTree(updatedTree);
   };
 
-  const renderTreeNode = (node, depth = 0) => {
-    const isExpanded = expandedNodes.has(node.id);
-    const hasChildren = node.children && node.children.length > 0;
-    const statusColors = {
-      completed: "#34A853",
-      in_progress: "#667eea",
-      not_started: "#666"
-    };
-
-    return (
-      <div key={node.id} style={{ marginLeft: depth * 20 }}>
-        <div 
-          className={`flex items-center gap-3 p-3 rounded-xl mb-2 transition-all cursor-pointer hover:bg-white/5 ${
-            node.status === "in_progress" ? "bg-[#667eea]/10 border border-[#667eea]/30" : ""
-          }`}
-          onClick={() => hasChildren ? toggleNode(node.id) : onStartTopic(node)}
-        >
-          {hasChildren ? (
-            <button onClick={(e) => { e.stopPropagation(); toggleNode(node.id); }}>
-              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-          ) : (
-            <div className="w-4" />
-          )}
-          
-          <div 
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: statusColors[node.status || "not_started"] }}
-          />
-          
-          <div className="flex-1">
-            <div className="font-medium text-sm">{node.name}</div>
-            <div className="text-xs text-white/50">{node.level} • {node.estimatedTime}</div>
-          </div>
-
-          {!hasChildren && (
-            <Button size="sm" variant="ghost" className="h-7 text-xs">
-              <Play className="w-3 h-3 mr-1" />
-              Start
-            </Button>
-          )}
-        </div>
-        
-        {isExpanded && hasChildren && (
-          <div className="ml-4 border-l border-white/10 pl-2">
-            {node.children.map(child => renderTreeNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
+  // Handle playing video from EditableLearningPath (already handled in parent via onPlayVideo)
+  const handlePlayVideo = (video) => {
+    if (onPlayVideo) {
+      onPlayVideo(video);
+    } else {
+      setCurrentVideo(video);
+      setShowVideoModal(true);
+    }
   };
 
   return (
