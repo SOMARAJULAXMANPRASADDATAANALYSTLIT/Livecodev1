@@ -10,12 +10,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from emergentintegrations.openai import OpenAI as EmergentOpenAI
-    from emergentintegrations.anthropic import Anthropic as EmergentAnthropic
-    from emergentintegrations.google_genai import genai as EmergentGoogleAI
+    import emergentintegrations.openai as emergent_openai
+    import emergentintegrations.anthropic as emergent_anthropic
+    import emergentintegrations.google_genai as emergent_google
     EMERGENT_AVAILABLE = True
-except ImportError:
-    logger.warning("emergentintegrations not installed")
+    logger.info("emergentintegrations imported successfully")
+except ImportError as e:
+    logger.error(f"Failed to import emergentintegrations: {e}")
     EMERGENT_AVAILABLE = False
 
 class EmergentLLMClient:
@@ -37,22 +38,22 @@ class EmergentLLMClient:
         """Initialize all provider clients with Emergent key"""
         try:
             # OpenAI via Emergent
-            self.clients['openai'] = EmergentOpenAI(api_key=self.api_key)
+            self.clients['openai'] = emergent_openai.OpenAI(api_key=self.api_key)
             logger.info("Emergent OpenAI client initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Emergent OpenAI: {e}")
         
         try:
             # Anthropic via Emergent
-            self.clients['anthropic'] = EmergentAnthropic(api_key=self.api_key)
+            self.clients['anthropic'] = emergent_anthropic.Anthropic(api_key=self.api_key)
             logger.info("Emergent Anthropic client initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Emergent Anthropic: {e}")
         
         try:
             # Google via Emergent
-            EmergentGoogleAI.configure(api_key=self.api_key)
-            self.clients['google'] = EmergentGoogleAI
+            emergent_google.genai.configure(api_key=self.api_key)
+            self.clients['google'] = emergent_google.genai
             logger.info("Emergent Google AI client initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Emergent Google: {e}")
