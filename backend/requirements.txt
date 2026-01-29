@@ -122,4 +122,10 @@ watchfiles==1.1.1
 websockets==15.0.1
 yarl==1.22.0
 youtube-transcript-api==0.6.1
+playwright==1.48.0
+beautifulsoup4==4.12.3
+html2text==2024.2.26
+python-telegram-bot==21.10
+discord.py==2.4.0
+slack-sdk==3.34.0
 zipp==3.23.0
