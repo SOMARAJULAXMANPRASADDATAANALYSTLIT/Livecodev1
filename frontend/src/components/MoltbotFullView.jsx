@@ -3,117 +3,188 @@ import {
   Terminal, Search, Globe, Code, Cpu, Brain, Zap, Play, Pause, 
   Download, Upload, Settings, Activity, Folder, FileText, Eye,
   Command, RefreshCw, Check, X, Loader2, Send, ChevronRight,
-  Box, Layers, Database, Cloud, Sparkles
+  Box, Layers, Database, Cloud, Sparkles, MessageSquare, Users,
+  Smartphone, QrCode, Key, TestTube
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 const MoltbotFullView = () => {
-  const [activeTab, setActiveTab] = useState("agent");
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
+  const [activeTab, setActiveTab] = useState("config");
+  const [config, setConfig] = useState(null);
+  const [services, setServices] = useState(null);
+  const [whatsappStatus, setWhatsappStatus] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [gatewayStatus, setGatewayStatus] = useState(null);
-  const [processes, setProcesses] = useState([]);
-  const [skills, setSkills] = useState([]);
-  const [browserStatus, setBrowserStatus] = useState({ running: false });
-  const [memory, setMemory] = useState("");
+  
+  // API Config
+  const [braveKey, setBraveKey] = useState("");
+  const [emergentKey, setEmergentKey] = useState("");
+  
+  // WhatsApp
+  const [qrCode, setQrCode] = useState(null);
+  const [whatsappContacts, setWhatsappContacts] = useState([]);
+  const [whatsappMessage, setWhatsappMessage] = useState("");
+  const [selectedContact, setSelectedContact] = useState("");
+  
+  // Tools
+  const [toolResult, setToolResult] = useState(null);
+  const [commandInput, setCommandInput] = useState("echo 'Hello Moltbot!'");
+  const [browserUrl, setBrowserUrl] = useState("https://example.com");
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Chat
+  const [messages, setMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  
   const messagesEndRef = useRef(null);
 
-  // Load gateway status on mount
   useEffect(() => {
-    loadGatewayStatus();
-    loadProcesses();
-    loadSkills();
+    loadConfig();
+    loadServices();
+    loadWhatsAppStatus();
   }, []);
 
-  const loadGatewayStatus = async () => {
+  const loadConfig = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/moltbot/tools/gateway/status`);
+      const response = await fetch(`${BACKEND_URL}/api/config/`);
       const data = await response.json();
-      setGatewayStatus(data);
-      setBrowserStatus(data.tools.browser);
+      setConfig(data);
     } catch (error) {
-      console.error("Failed to load gateway status:", error);
+      console.error("Failed to load config:", error);
     }
   };
 
-  const loadProcesses = async () => {
+  const loadServices = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/moltbot/tools/process/list`);
+      const response = await fetch(`${BACKEND_URL}/api/config/services`);
       const data = await response.json();
-      setProcesses(data.sessions || []);
+      setServices(data);
     } catch (error) {
-      console.error("Failed to load processes:", error);
+      console.error("Failed to load services:", error);
     }
   };
 
-  const loadSkills = async () => {
+  const loadWhatsAppStatus = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/moltbot/tools/skills/list`);
+      const response = await fetch(`${BACKEND_URL}/api/whatsapp/status`);
       const data = await response.json();
-      setSkills(data.skills || []);
+      setWhatsappStatus(data);
+      if (data.qr) {
+        setQrCode(data.qr);
+      }
     } catch (error) {
-      console.error("Failed to load skills:", error);
+      console.error("Failed to load WhatsApp status:", error);
     }
   };
 
-  const loadMemory = async () => {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/moltbot/tools/memory`);
-      const data = await response.json();
-      setMemory(data.content || "");
-    } catch (error) {
-      console.error("Failed to load memory:", error);
-    }
-  };
-
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
-
-    const userMessage = input.trim();
-    setInput("");
-    
-    setMessages(prev => [...prev, {
-      role: "user",
-      content: userMessage
-    }]);
-
+  const saveApiKey = async (service, key) => {
     setIsLoading(true);
-
     try {
-      const response = await fetch(`${BACKEND_URL}/api/moltbot/tools/agent/chat`, {
+      const updates = {};
+      if (service === "brave") updates.brave_api_key = key;
+      if (service === "emergent") updates.emergent_llm_key = key;
+      
+      const response = await fetch(`${BACKEND_URL}/api/config/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates)
+      });
+      
+      if (response.ok) {
+        toast.success(`${service} API key saved!`);
+        loadConfig();
+        loadServices();
+      }
+    } catch (error) {
+      toast.error(`Failed to save ${service} key`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testApiKey = async (service, key) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/config/test-key`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service, api_key: key })
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        toast.success(`✅ ${service} API key is valid!`);
+      } else {
+        toast.error(`❌ ${service} key test failed: ${data.error}`);
+      }
+    } catch (error) {
+      toast.error(`Test failed: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startWhatsApp = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/whatsapp/start`, {
+        method: "POST"
+      });
+      const data = await response.json();
+      toast.success("WhatsApp client starting...");
+      
+      // Poll for QR code
+      setTimeout(() => {
+        loadWhatsAppStatus();
+      }, 3000);
+    } catch (error) {
+      toast.error("Failed to start WhatsApp");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadWhatsAppContacts = async () => {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/whatsapp/contacts`);
+      const data = await response.json();
+      setWhatsappContacts(data.contacts || []);
+    } catch (error) {
+      console.error("Failed to load contacts:", error);
+    }
+  };
+
+  const sendWhatsAppMessage = async () => {
+    if (!selectedContact || !whatsappMessage) {
+      toast.error("Select a contact and enter a message");
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/whatsapp/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: userMessage,
-          tools_enabled: ["web_search", "web_fetch", "browser", "exec"],
-          session_id: "moltbot-full",
-          skill_level: "intermediate"
+          to: selectedContact,
+          message: whatsappMessage
         })
       });
-
-      if (!response.ok) throw new Error("Failed to get response");
-
+      
       const data = await response.json();
-      
-      setMessages(prev => [...prev, {
-        role: "assistant",
-        content: data.response,
-        tool_result: data.tool_result
-      }]);
-
-      // Refresh status
-      loadGatewayStatus();
-      loadProcesses();
-      
+      if (data.success) {
+        toast.success("Message sent!");
+        setWhatsappMessage("");
+      } else {
+        toast.error("Failed to send message");
+      }
     } catch (error) {
-      console.error("Agent error:", error);
-      toast.error("Failed to get response");
+      toast.error("Send error: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -121,58 +192,39 @@ const MoltbotFullView = () => {
 
   const executeTool = async (tool, params) => {
     setIsLoading(true);
+    setToolResult(null);
     try {
-      let response;
+      let endpoint = "";
+      let method = "POST";
+      let body = params;
       
       if (tool === "exec") {
-        response = await fetch(`${BACKEND_URL}/api/moltbot/tools/exec`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(params)
-        });
-      } else if (tool === "web_search") {
-        response = await fetch(`${BACKEND_URL}/api/moltbot/tools/web/search`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(params)
-        });
+        endpoint = "/api/moltbot/tools/exec";
+        body = { command: params.command, background: false };
       } else if (tool === "browser") {
-        response = await fetch(`${BACKEND_URL}/api/moltbot/tools/browser`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(params)
-        });
+        endpoint = "/api/moltbot/tools/browser";
+      } else if (tool === "web_search") {
+        endpoint = "/api/moltbot/tools/web/search";
+      } else if (tool === "web_fetch") {
+        endpoint = "/api/moltbot/tools/web/fetch";
       }
-
+      
+      const response = await fetch(`${BACKEND_URL}${endpoint}`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      
       const data = await response.json();
-      
-      setMessages(prev => [...prev, {
-        role: "system",
-        content: `**Tool: ${tool}**\n\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``
-      }]);
-
-      toast.success(`${tool} executed successfully`);
-      loadGatewayStatus();
-      loadProcesses();
-      
+      setToolResult({ tool, data });
+      toast.success(`${tool} executed!`);
     } catch (error) {
-      console.error(`${tool} error:`, error);
-      toast.error(`Failed to execute ${tool}`);
+      toast.error(`${tool} failed: ${error.message}`);
+      setToolResult({ tool, error: error.message });
     } finally {
       setIsLoading(false);
     }
   };
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f0e17] text-white">
@@ -181,31 +233,28 @@ const MoltbotFullView = () => {
         <div className="max-w-[1800px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#EA4335] to-[#FBBC04] flex items-center justify-center">
-                  <Terminal className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold">Moltbot 🦞</h1>
-                  <p className="text-sm text-white/50">Full Gateway Implementation</p>
-                </div>
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#EA4335] to-[#FBBC04] flex items-center justify-center">
+                <Terminal className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">🦞 Moltbot Full</h1>
+                <p className="text-sm text-white/50">Complete Gateway Implementation</p>
               </div>
             </div>
             
             <div className="flex items-center gap-4">
-              {gatewayStatus && (
-                <>
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-[#34A853]/20 rounded-lg border border-[#34A853]/30">
-                    <div className="w-2 h-2 rounded-full bg-[#34A853] animate-pulse" />
-                    <span className="text-sm font-medium text-[#34A853]">Gateway Online</span>
-                  </div>
-                  <div className="text-xs text-white/40">
-                    v{gatewayStatus.version}
-                  </div>
-                </>
+              {services && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-[#34A853]/20 rounded-lg border border-[#34A853]/30">
+                  <div className="w-2 h-2 rounded-full bg-[#34A853] animate-pulse" />
+                  <span className="text-sm font-medium text-[#34A853]">Gateway Online</span>
+                </div>
               )}
               <button
-                onClick={loadGatewayStatus}
+                onClick={() => {
+                  loadConfig();
+                  loadServices();
+                  loadWhatsAppStatus();
+                }}
                 className="p-2 rounded-lg hover:bg-white/10 transition-colors"
               >
                 <RefreshCw className="w-5 h-5" />
@@ -213,32 +262,26 @@ const MoltbotFullView = () => {
             </div>
           </div>
           
-          {/* Tab Navigation */}
+          {/* Tabs */}
           <div className="flex gap-2 mt-4 overflow-x-auto">
             {[
-              { id: "agent", label: "AI Agent", icon: Brain },
-              { id: "tools", label: "Tools", icon: Zap },
-              { id: "processes", label: "Processes", icon: Activity },
-              { id: "skills", label: "Skills", icon: Box },
-              { id: "memory", label: "Memory", icon: Database },
-              { id: "status", label: "Status", icon: Settings }
+              { id: "config", label: "⚙️ Configuration", icon: Settings },
+              { id: "whatsapp", label: "📱 WhatsApp", icon: Smartphone },
+              { id: "tools", label: "🛠️ Tools", icon: Zap },
+              { id: "agent", label: "🤖 AI Agent", icon: Brain },
+              { id: "status", label: "📊 Status", icon: Activity }
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  if (tab.id === "memory") loadMemory();
-                  if (tab.id === "processes") loadProcesses();
-                  if (tab.id === "skills") loadSkills();
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all whitespace-nowrap ${
                   activeTab === tab.id
                     ? "bg-[#667eea] text-white"
                     : "bg-white/5 text-white/70 hover:bg-white/10"
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
-                <span className="text-sm font-medium whitespace-nowrap">{tab.label}</span>
+                <span className="text-sm font-medium">{tab.label}</span>
               </button>
             ))}
           </div>
@@ -247,352 +290,328 @@ const MoltbotFullView = () => {
 
       {/* Content */}
       <div className="max-w-[1800px] mx-auto p-6">
-        {/* Agent Tab */}
-        {activeTab === "agent" && (
-          <div className="grid grid-cols-3 gap-6">
-            {/* Chat */}
-            <div className="col-span-2 bg-white/5 rounded-xl border border-white/10 p-6 flex flex-col" style={{ height: "calc(100vh - 220px)" }}>
+        
+        {/* Configuration Tab */}
+        {activeTab === "config" && (
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-white/5 rounded-xl border border-white/10 p-6">
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Brain className="w-5 h-5 text-[#667eea]" />
-                AI Agent with Real Tools
+                <Key className="w-5 h-5 text-[#FBBC04]" />
+                Brave API Key (Web Search)
               </h2>
-              
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-                {messages.length === 0 && (
-                  <div className="text-center text-white/50 py-12">
-                    <Terminal className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg font-medium mb-2">Welcome to Moltbot!</p>
-                    <p className="text-sm">I'm your AI agent with REAL tool access:</p>
-                    <div className="mt-4 space-y-1 text-xs">
-                      <p>🔍 <strong>web_search</strong> - Search the web (Brave API)</p>
-                      <p>🌐 <strong>web_fetch</strong> - Fetch webpage content</p>
-                      <p>🌍 <strong>browser</strong> - Control a real browser</p>
-                      <p>⚙️ <strong>exec</strong> - Run shell commands</p>
-                    </div>
-                    <p className="mt-4 text-xs">Try: "Search for latest React tutorials"</p>
-                  </div>
-                )}
-                
-                {messages.map((msg, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[85%] p-4 rounded-xl ${
-                        msg.role === "user"
-                          ? "bg-[#667eea] text-white"
-                          : msg.role === "system"
-                          ? "bg-[#FBBC04]/20 border border-[#FBBC04]/30"
-                          : "bg-white/10 border border-white/10"
-                      }`}
-                    >
-                      {msg.role === "assistant" ? (
-                        <div className="prose prose-invert prose-sm max-w-none">
-                          <ReactMarkdown
-                            components={{
-                              h1: ({ children }) => <h1 className="text-lg font-bold mb-2">{children}</h1>,
-                              h2: ({ children }) => <h2 className="text-base font-bold mb-2">{children}</h2>,
-                              p: ({ children }) => <p className="text-sm mb-2 last:mb-0">{children}</p>,
-                              code: ({ inline, children }) => 
-                                inline ? (
-                                  <code className="px-1.5 py-0.5 bg-[#667eea]/20 text-[#667eea] rounded text-xs">
-                                    {children}
-                                  </code>
-                                ) : (
-                                  <code className="block p-2 bg-black/40 rounded text-xs overflow-x-auto">
-                                    {children}
-                                  </code>
-                                ),
-                              ul: ({ children }) => <ul className="list-disc list-inside text-sm mb-2">{children}</ul>,
-                            }}
-                          >
-                            {msg.content}
-                          </ReactMarkdown>
-                          {msg.tool_result && (
-                            <div className="mt-3 pt-3 border-t border-white/10">
-                              <div className="text-xs text-white/50 mb-1">Tool Result:</div>
-                              <pre className="text-xs bg-black/40 p-2 rounded overflow-x-auto">
-                                {JSON.stringify(msg.tool_result, null, 2)}
-                              </pre>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                
-                {isLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-white/10 border border-white/10 p-4 rounded-xl">
-                      <Loader2 className="w-4 h-4 animate-spin text-[#667eea]" />
-                    </div>
-                  </div>
-                )}
-                
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Input */}
-              <div className="flex gap-2">
-                <Textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Ask me anything... I have real tools!"
-                  className="flex-1 min-h-[80px] bg-white/5 border-white/10 text-sm"
-                  disabled={isLoading}
+              <p className="text-sm text-white/60 mb-4">
+                Get your free key from: <a href="https://brave.com/search/api/" target="_blank" className="text-[#667eea] hover:underline">brave.com/search/api</a>
+              </p>
+              <div className="space-y-3">
+                <Input
+                  type="password"
+                  placeholder="Enter Brave API key..."
+                  value={braveKey}
+                  onChange={(e) => setBraveKey(e.target.value)}
+                  className="bg-white/5 border-white/10"
                 />
-                <Button
-                  onClick={sendMessage}
-                  disabled={isLoading || !input.trim()}
-                  className="px-6 bg-[#667eea] hover:bg-[#667eea]/80"
-                >
-                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => saveApiKey("brave", braveKey)}
+                    disabled={!braveKey || isLoading}
+                    className="flex-1 bg-[#667eea] hover:bg-[#667eea]/80"
+                  >
+                    Save Key
+                  </Button>
+                  <Button
+                    onClick={() => testApiKey("brave", braveKey)}
+                    disabled={!braveKey || isLoading}
+                    className="bg-[#34A853] hover:bg-[#34A853]/80"
+                  >
+                    <TestTube className="w-4 h-4 mr-2" />
+                    Test
+                  </Button>
+                </div>
+                {services?.brave?.configured && (
+                  <div className="text-sm text-[#34A853] flex items-center gap-2">
+                    <Check className="w-4 h-4" />
+                    Configured
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Quick Tools */}
-            <div className="space-y-4">
-              <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-                <h3 className="font-semibold mb-3 flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-[#FBBC04]" />
-                  Quick Tools
-                </h3>
-                
-                <div className="space-y-2">
-                  <button
-                    onClick={() => executeTool("web_search", { query: "latest AI news", count: 5 })}
-                    className="w-full p-3 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-left transition-colors"
-                    disabled={isLoading}
+            <div className="bg-white/5 rounded-xl border border-white/10 p-6">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#667eea]" />
+                Emergent LLM Key
+              </h2>
+              <p className="text-sm text-white/60 mb-4">
+                Universal key for OpenAI, Anthropic, Google models. Get from your profile.
+              </p>
+              <div className="space-y-3">
+                <Input
+                  type="password"
+                  placeholder="Enter Emergent LLM key..."
+                  value={emergentKey}
+                  onChange={(e) => setEmergentKey(e.target.value)}
+                  className="bg-white/5 border-white/10"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => saveApiKey("emergent", emergentKey)}
+                    disabled={!emergentKey || isLoading}
+                    className="flex-1 bg-[#667eea] hover:bg-[#667eea]/80"
                   >
-                    <div className="flex items-center gap-2 text-sm font-medium mb-1">
-                      <Search className="w-4 h-4 text-[#667eea]" />
-                      Web Search
-                    </div>
-                    <div className="text-xs text-white/50">Search latest AI news</div>
-                  </button>
-
-                  <button
-                    onClick={() => executeTool("browser", { action: "start" })}
-                    className="w-full p-3 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-left transition-colors"
-                    disabled={isLoading || browserStatus.running}
-                  >
-                    <div className="flex items-center gap-2 text-sm font-medium mb-1">
-                      <Globe className="w-4 h-4 text-[#34A853]" />
-                      Start Browser
-                    </div>
-                    <div className="text-xs text-white/50">
-                      {browserStatus.running ? "Already running" : "Launch Playwright browser"}
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => executeTool("exec", { command: "echo 'Hello from Moltbot!'", background: false })}
-                    className="w-full p-3 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-left transition-colors"
-                    disabled={isLoading}
-                  >
-                    <div className="flex items-center gap-2 text-sm font-medium mb-1">
-                      <Terminal className="w-4 h-4 text-[#EA4335]" />
-                      Run Command
-                    </div>
-                    <div className="text-xs text-white/50">Execute echo command</div>
-                  </button>
+                    Save Key
+                  </Button>
                 </div>
+                {services?.emergent?.configured && (
+                  <div className="text-sm text-[#34A853] flex items-center gap-2">
+                    <Check className="w-4 h-4" />
+                    Configured
+                  </div>
+                )}
               </div>
+            </div>
 
-              {/* Features */}
-              <div className="bg-white/5 rounded-xl border border-white/10 p-4">
-                <h3 className="font-semibold mb-3">Features</h3>
-                <div className="space-y-2 text-sm">
-                  {gatewayStatus?.features && Object.entries(gatewayStatus.features).map(([key, value]) => (
-                    <div key={key} className="flex items-center justify-between">
-                      <span className="text-white/70 capitalize">{key.replace(/_/g, " ")}</span>
-                      {value ? (
-                        <Check className="w-4 h-4 text-[#34A853]" />
-                      ) : (
-                        <X className="w-4 h-4 text-white/30" />
-                      )}
+            <div className="col-span-2 bg-white/5 rounded-xl border border-white/10 p-6">
+              <h2 className="text-xl font-bold mb-4">Services Status</h2>
+              {services && (
+                <div className="grid grid-cols-4 gap-4">
+                  {Object.entries(services).map(([key, value]) => (
+                    <div key={key} className="p-4 bg-white/5 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium capitalize">{key}</span>
+                        {value.configured ? (
+                          <Check className="w-4 h-4 text-[#34A853]" />
+                        ) : (
+                          <X className="w-4 h-4 text-white/30" />
+                        )}
+                      </div>
+                      <div className="text-xs text-white/50">
+                        {value.configured ? "Configured" : "Not configured"}
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* WhatsApp Tab */}
+        {activeTab === "whatsapp" && (
+          <div className="grid grid-cols-2 gap-6">
+            <div className="bg-white/5 rounded-xl border border-white/10 p-6">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-[#34A853]" />
+                WhatsApp Authentication
+              </h2>
+              
+              {!whatsappStatus?.authenticated && (
+                <div className="space-y-4">
+                  <Button
+                    onClick={startWhatsApp}
+                    disabled={isLoading}
+                    className="w-full bg-[#34A853] hover:bg-[#34A853]/80"
+                  >
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                    Start WhatsApp Client
+                  </Button>
+                  
+                  {qrCode && (
+                    <div className="p-4 bg-white rounded-lg">
+                      <p className="text-sm text-black mb-2 font-medium">Scan with WhatsApp:</p>
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`}
+                        alt="WhatsApp QR Code"
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {whatsappStatus?.authenticated && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-[#34A853]/20 rounded-lg border border-[#34A853]/30">
+                    <div className="flex items-center gap-2 text-[#34A853]">
+                      <Check className="w-5 h-5" />
+                      <span className="font-medium">WhatsApp Connected!</span>
+                    </div>
+                  </div>
+                  
+                  <Button
+                    onClick={loadWhatsAppContacts}
+                    className="w-full bg-[#667eea] hover:bg-[#667eea]/80"
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    Load Contacts
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white/5 rounded-xl border border-white/10 p-6">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-[#667eea]" />
+                Send Message
+              </h2>
+              
+              {whatsappStatus?.authenticated ? (
+                <div className="space-y-3">
+                  <select
+                    value={selectedContact}
+                    onChange={(e) => setSelectedContact(e.target.value)}
+                    className="w-full p-2 bg-white/5 border border-white/10 rounded-lg text-sm"
+                  >
+                    <option value="">Select contact...</option>
+                    {whatsappContacts.map(contact => (
+                      <option key={contact.id} value={contact.id}>
+                        {contact.name || contact.number}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  <Textarea
+                    value={whatsappMessage}
+                    onChange={(e) => setWhatsappMessage(e.target.value)}
+                    placeholder="Type your message..."
+                    className="min-h-[120px] bg-white/5 border-white/10"
+                  />
+                  
+                  <Button
+                    onClick={sendWhatsAppMessage}
+                    disabled={!selectedContact || !whatsappMessage || isLoading}
+                    className="w-full bg-[#34A853] hover:bg-[#34A853]/80"
+                  >
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                    Send Message
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center text-white/50 py-12">
+                  <Smartphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>Connect WhatsApp first</p>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {/* Tools Tab */}
         {activeTab === "tools" && (
-          <div className="grid grid-cols-3 gap-6">
-            {[
-              { name: "exec", icon: Terminal, desc: "Run shell commands", color: "EA4335" },
-              { name: "web_search", icon: Search, desc: "Search the web (Brave API)", color: "667eea" },
-              { name: "web_fetch", icon: Globe, desc: "Fetch webpage content", color: "34A853" },
-              { name: "browser", icon: Eye, desc: "Control browser automation", color: "FBBC04" },
-              { name: "process", icon: Activity, desc: "Manage background tasks", color: "764ba2" },
-              { name: "skills", icon: Box, desc: "Installed skills & plugins", color: "667eea" }
-            ].map(tool => (
-              <div key={tool.name} className="bg-white/5 rounded-xl border border-white/10 p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className={`w-12 h-12 rounded-xl bg-[#${tool.color}]/20 flex items-center justify-center`}>
-                    <tool.icon className="w-6 h-6" style={{ color: `#${tool.color}` }} />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">{tool.name}</h3>
-                    <p className="text-xs text-white/50">{tool.desc}</p>
+          <div className="space-y-6">
+            <div className="grid grid-cols-3 gap-6">
+              {/* Exec Tool */}
+              <div className="bg-white/5 rounded-xl border border-white/10 p-6">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Terminal className="w-5 h-5 text-[#EA4335]" />
+                  Command Execution
+                </h3>
+                <div className="space-y-3">
+                  <Input
+                    value={commandInput}
+                    onChange={(e) => setCommandInput(e.target.value)}
+                    placeholder="Enter command..."
+                    className="bg-white/5 border-white/10 font-mono text-sm"
+                  />
+                  <Button
+                    onClick={() => executeTool("exec", { command: commandInput })}
+                    disabled={isLoading}
+                    className="w-full bg-[#EA4335] hover:bg-[#EA4335]/80"
+                  >
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                    Execute
+                  </Button>
+                </div>
+              </div>
+
+              {/* Browser Tool */}
+              <div className="bg-white/5 rounded-xl border border-white/10 p-6">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Globe className="w-5 h-5 text-[#34A853]" />
+                  Browser Control
+                </h3>
+                <div className="space-y-3">
+                  <Input
+                    value={browserUrl}
+                    onChange={(e) => setBrowserUrl(e.target.value)}
+                    placeholder="URL..."
+                    className="bg-white/5 border-white/10 text-sm"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      onClick={() => executeTool("browser", { action: "start" })}
+                      disabled={isLoading}
+                      size="sm"
+                      className="bg-[#34A853] hover:bg-[#34A853]/80"
+                    >
+                      Start
+                    </Button>
+                    <Button
+                      onClick={() => executeTool("browser", { action: "navigate", url: browserUrl })}
+                      disabled={isLoading}
+                      size="sm"
+                      className="bg-[#667eea] hover:bg-[#667eea]/80"
+                    >
+                      Navigate
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  size="sm"
-                  className={`w-full bg-[#${tool.color}]/20 hover:bg-[#${tool.color}]/30 border border-[#${tool.color}]/30`}
-                >
-                  Try {tool.name}
-                </Button>
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* Processes Tab */}
-        {activeTab === "processes" && (
-          <div className="bg-white/5 rounded-xl border border-white/10 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Activity className="w-5 h-5 text-[#667eea]" />
-                Background Processes
-              </h2>
-              <button
-                onClick={loadProcesses}
-                className="p-2 rounded-lg hover:bg-white/10"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </div>
-            
-            {processes.length === 0 ? (
-              <div className="text-center text-white/50 py-12">
-                <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>No background processes</p>
+              {/* Web Search Tool */}
+              <div className="bg-white/5 rounded-xl border border-white/10 p-6">
+                <h3 className="font-semibold mb-3 flex items-center gap-2">
+                  <Search className="w-5 h-5 text-[#667eea]" />
+                  Web Search
+                </h3>
+                <div className="space-y-3">
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search query..."
+                    className="bg-white/5 border-white/10 text-sm"
+                  />
+                  <Button
+                    onClick={() => executeTool("web_search", { query: searchQuery, count: 5 })}
+                    disabled={isLoading || !searchQuery}
+                    className="w-full bg-[#667eea] hover:bg-[#667eea]/80"
+                  >
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Search className="w-4 h-4 mr-2" />}
+                    Search
+                  </Button>
+                </div>
               </div>
-            ) : (
-              <div className="space-y-2">
-                {processes.map(proc => (
-                  <div key={proc.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="text-sm font-medium mb-1">{proc.command}</div>
-                        <div className="flex items-center gap-4 text-xs text-white/50">
-                          <span>PID: {proc.pid}</span>
-                          <span>Status: <span className={proc.status === "running" ? "text-[#34A853]" : "text-white/70"}>{proc.status}</span></span>
-                          <span>{proc.created_at}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            </div>
+
+            {/* Tool Results */}
+            {toolResult && (
+              <div className="bg-white/5 rounded-xl border border-white/10 p-6">
+                <h3 className="font-semibold mb-3">Result: {toolResult.tool}</h3>
+                <pre className="text-xs bg-black/40 p-4 rounded overflow-x-auto">
+                  {JSON.stringify(toolResult.data || toolResult.error, null, 2)}
+                </pre>
               </div>
             )}
           </div>
         )}
 
-        {/* Skills Tab */}
-        {activeTab === "skills" && (
-          <div className="bg-white/5 rounded-xl border border-white/10 p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Box className="w-5 h-5 text-[#667eea]" />
-              Skills ({skills.length})
-            </h2>
-            
-            <div className="grid grid-cols-2 gap-4">
-              {skills.map(skill => (
-                <div key={skill.id} className="p-4 bg-white/5 rounded-lg border border-white/10">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3 className="font-medium">{skill.name}</h3>
-                      <p className="text-xs text-white/50 mt-1">{skill.description}</p>
-                    </div>
-                    <div className={`px-2 py-1 rounded text-xs ${
-                      skill.enabled 
-                        ? "bg-[#34A853]/20 text-[#34A853]" 
-                        : "bg-white/10 text-white/50"
-                    }`}>
-                      {skill.enabled ? "Enabled" : "Disabled"}
-                    </div>
-                  </div>
-                  <div className="text-xs text-white/40 capitalize">{skill.category}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Memory Tab */}
-        {activeTab === "memory" && (
-          <div className="bg-white/5 rounded-xl border border-white/10 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Database className="w-5 h-5 text-[#667eea]" />
-                Persistent Memory
-              </h2>
-              <button
-                onClick={loadMemory}
-                className="p-2 rounded-lg hover:bg-white/10"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="bg-black/40 rounded-lg p-4 font-mono text-sm whitespace-pre-wrap">
-              {memory || "No memory stored yet"}
-            </div>
-          </div>
-        )}
-
         {/* Status Tab */}
-        {activeTab === "status" && gatewayStatus && (
+        {activeTab === "status" && (
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-white/5 rounded-xl border border-white/10 p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <Settings className="w-8 h-8 text-[#667eea]" />
-                  <div>
-                    <div className="text-2xl font-bold">{gatewayStatus.version}</div>
-                    <div className="text-xs text-white/50">Gateway Version</div>
-                  </div>
-                </div>
+                <div className="text-2xl font-bold mb-1">v2026.1.27</div>
+                <div className="text-sm text-white/50">Gateway Version</div>
               </div>
-
               <div className="bg-white/5 rounded-xl border border-white/10 p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <Activity className="w-8 h-8 text-[#34A853]" />
-                  <div>
-                    <div className="text-2xl font-bold">{gatewayStatus.tools.process.sessions}</div>
-                    <div className="text-xs text-white/50">Active Processes</div>
-                  </div>
+                <div className="text-2xl font-bold mb-1">
+                  {whatsappStatus?.authenticated ? "✅ Connected" : "❌ Not Connected"}
                 </div>
+                <div className="text-sm text-white/50">WhatsApp Status</div>
               </div>
-
               <div className="bg-white/5 rounded-xl border border-white/10 p-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <Box className="w-8 h-8 text-[#FBBC04]" />
-                  <div>
-                    <div className="text-2xl font-bold">{gatewayStatus.tools.skills.count}</div>
-                    <div className="text-xs text-white/50">Installed Skills</div>
-                  </div>
-                </div>
+                <div className="text-2xl font-bold mb-1">9 Tools</div>
+                <div className="text-sm text-white/50">Available</div>
               </div>
-            </div>
-
-            <div className="bg-white/5 rounded-xl border border-white/10 p-6">
-              <h3 className="font-semibold mb-4">Complete Status</h3>
-              <pre className="text-xs bg-black/40 p-4 rounded overflow-x-auto">
-                {JSON.stringify(gatewayStatus, null, 2)}
-              </pre>
             </div>
           </div>
         )}
