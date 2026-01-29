@@ -53,6 +53,23 @@ AI-powered educational platform providing personalized, real-time coding assista
 
 ## What's Been Implemented
 
+### January 29, 2026 - Editable Learning Path with YouTube Integration
+- Created EditableLearningPath component (`/app/frontend/src/components/EditableLearningPath.jsx`)
+- Users can **add custom topics** to their learning tree with "+ Add Topic" button
+- Users can **add YouTube URLs** to any topic with "Add URL" button
+- **Video preview** shows thumbnail and title when pasting YouTube URL
+- **Free Learning Resources** section auto-curates YouTube videos and courses
+- **Video Learning Modal** plays videos with AI mentor companion
+- AI mentor uses video transcript to answer questions in real-time
+- Backend APIs for custom learning paths:
+  - POST /api/learning/paths/create
+  - GET /api/learning/paths
+  - POST /api/learning/paths/{path_id}/topics
+  - PUT /api/learning/topics/{topic_id}
+  - DELETE /api/learning/topics/{topic_id}
+  - POST /api/learning/topics/{topic_id}/youtube
+  - GET /api/learning/youtube/preview/{video_id}
+
 ### January 27, 2026 - Learning Path & Multi-Agent System
 - Created comprehensive Learning Path Mentor view (`/app/frontend/src/components/LearningPathView.jsx`)
 - Implemented 4-step onboarding wizard with industry selection
