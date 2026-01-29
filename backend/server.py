@@ -3714,6 +3714,442 @@ Provide a helpful, clear explanation that helps the student learn."""
         logger.error(f"Video QA error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============== ENHANCED VIDEO LEARNING WITH AI MENTORING ==============
+
+# YouTube Transcript Fetching
+try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+    TRANSCRIPT_API_AVAILABLE = True
+except ImportError:
+    TRANSCRIPT_API_AVAILABLE = False
+    logger.warning("youtube-transcript-api not installed. Video transcripts will not be available.")
+
+class VideoTranscriptRequest(BaseModel):
+    video_id: str
+    language: str = "en"
+
+@api_router.post("/learning/video/transcript")
+async def get_video_transcript(request: VideoTranscriptRequest):
+    """Fetch YouTube video transcript"""
+    if not TRANSCRIPT_API_AVAILABLE:
+        raise HTTPException(status_code=501, detail="Transcript API not available")
+    
+    try:
+        # Fetch transcript
+        transcript_list = YouTubeTranscriptApi.get_transcript(
+            request.video_id,
+            languages=[request.language, 'en']
+        )
+        
+        # Format transcript with timestamps
+        formatted_transcript = []
+        full_text = []
+        
+        for entry in transcript_list:
+            formatted_transcript.append({
+                "start": entry['start'],
+                "duration": entry['duration'],
+                "text": entry['text']
+            })
+            full_text.append(entry['text'])
+        
+        return {
+            "success": True,
+            "video_id": request.video_id,
+            "transcript": formatted_transcript,
+            "full_text": " ".join(full_text),
+            "total_segments": len(formatted_transcript),
+            "available": True
+        }
+        
+    except Exception as e:
+        logger.error(f"Transcript fetch error: {e}")
+        return {
+            "success": False,
+            "video_id": request.video_id,
+            "transcript": [],
+            "full_text": "",
+            "total_segments": 0,
+            "available": False,
+            "error": str(e)
+        }
+
+class VideoContextualHelpRequest(BaseModel):
+    video_id: str
+    video_title: str
+    current_time: float
+    transcript_segment: Optional[str] = None
+    skill_level: str = "intermediate"
+    help_type: str = "explain"  # explain, clarify, example, deeper
+
+@api_router.post("/learning/video/contextual-help")
+async def video_contextual_help(request: VideoContextualHelpRequest):
+    """Proactive AI help based on current video position"""
+    try:
+        skill_context = get_skill_context(request.skill_level)
+        
+        help_prompts = {
+            "explain": "Explain what's being discussed",
+            "clarify": "Clarify this concept in simpler terms",
+            "example": "Provide a practical example",
+            "deeper": "Go deeper into this topic"
+        }
+        
+        system_prompt = f"""You are an AI learning companion watching a video alongside the student.
+
+VIDEO: {request.video_title}
+TIMESTAMP: {int(request.current_time)}s
+HELP TYPE: {help_prompts.get(request.help_type, 'Help')}
+
+{skill_context}
+
+YOUR ROLE AS AI WATCHING COMPANION:
+- You're watching the video WITH the student (not just answering questions)
+- Provide proactive insights based on what's currently on screen
+- Anticipate confusion and explain preemptively
+- Suggest "pause here if you're confused" moments
+- Connect concepts to previous parts of the video
+- Highlight key takeaways
+
+RESPONSE FORMAT:
+## 🎯 Quick Insight
+[One-sentence key point]
+
+## 📖 Explanation
+[Clear, detailed explanation]
+
+## 💡 Pro Tip
+[Additional context or best practice]
+
+## ⏸️ Need to Pause?
+[Yes/No + reason]
+
+Keep it conversational and supportive!"""
+        
+        chat = get_chat_instance(system_prompt)
+        
+        context = f"""At {int(request.current_time)}s in the video...
+        
+"""
+        
+        if request.transcript_segment:
+            context += f"Currently being said: \"{request.transcript_segment}\"\n\n"
+        
+        context += f"Student wants: {help_prompts.get(request.help_type, 'Help understanding this part')}"
+        
+        user_msg = UserMessage(text=context)
+        response = await chat.send_message(user_msg)
+        
+        return {
+            "help": response,
+            "timestamp": request.current_time,
+            "video_id": request.video_id,
+            "help_type": request.help_type
+        }
+        
+    except Exception as e:
+        logger.error(f"Contextual help error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ProactiveVideoAnalysisRequest(BaseModel):
+    video_id: str
+    video_title: str
+    current_time: float
+    last_pause_time: Optional[float] = None
+    watch_duration: float = 0
+    skill_level: str = "intermediate"
+    transcript_context: Optional[str] = None
+
+@api_router.post("/learning/video/proactive-analysis")
+async def proactive_video_analysis(request: ProactiveVideoAnalysisRequest):
+    """AI proactively analyzes if student might need help"""
+    try:
+        skill_context = get_skill_context(request.skill_level)
+        
+        # Detect potential confusion signals
+        rewound = request.last_pause_time and request.current_time < request.last_pause_time
+        paused_frequently = request.watch_duration > request.current_time * 1.5
+        
+        system_prompt = f"""You are an AI mentor monitoring a student's learning in real-time.
+
+VIDEO: {request.video_title}
+CURRENT: {int(request.current_time)}s
+SIGNALS: {'Rewound video' if rewound else 'Normal playback'}
+
+{skill_context}
+
+ANALYZE:
+1. Is this a complex section that might need explanation?
+2. Should I offer proactive help?
+3. What specific insight would be most valuable?
+
+RESPOND WITH:
+{{
+    "should_intervene": true/false,
+    "reason": "Why intervention is/isn't needed",
+    "proactive_message": "Helpful message if intervening",
+    "severity": "low|medium|high"
+}}"""
+        
+        chat = get_chat_instance(system_prompt, model_type="fast")
+        
+        context = f"""Student watching: {request.video_title}
+Timestamp: {int(request.current_time)}s
+Watch pattern: {'Possible confusion - rewound' if rewound else 'Steady progress'}
+
+"""
+        
+        if request.transcript_context:
+            context += f"Current content: \"{request.transcript_context[:200]}...\""
+        
+        user_msg = UserMessage(text=context)
+        response = await chat.send_message(user_msg)
+        
+        analysis = safe_parse_json(response, {
+            "should_intervene": False,
+            "reason": "No intervention needed",
+            "proactive_message": "",
+            "severity": "low"
+        })
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Proactive analysis error: {e}")
+        return {
+            "should_intervene": False,
+            "reason": "Analysis error",
+            "proactive_message": "",
+            "severity": "low"
+        }
+
+class ComprehensionCheckRequest(BaseModel):
+    video_id: str
+    video_title: str
+    topic_covered: str
+    skill_level: str = "intermediate"
+
+@api_router.post("/learning/video/comprehension-check")
+async def video_comprehension_check(request: ComprehensionCheckRequest):
+    """Generate quick comprehension check question"""
+    try:
+        skill_context = get_skill_context(request.skill_level)
+        
+        system_prompt = f"""Generate a quick comprehension check question for a video topic.
+
+TOPIC: {request.topic_covered}
+VIDEO: {request.video_title}
+
+{skill_context}
+
+CREATE:
+1. One focused question testing understanding
+2. 4 multiple choice options (A, B, C, D)
+3. Correct answer with brief explanation
+
+FORMAT AS JSON:
+{{
+    "question": "Your question",
+    "options": {{
+        "A": "option 1",
+        "B": "option 2",
+        "C": "option 3",
+        "D": "option 4"
+    }},
+    "correct_answer": "A",
+    "explanation": "Why this is correct"
+}}"""
+        
+        chat = get_chat_instance(system_prompt, model_type="fast")
+        user_msg = UserMessage(text=f"Generate comprehension check for: {request.topic_covered}")
+        response = await chat.send_message(user_msg)
+        
+        question_data = safe_parse_json(response, {
+            "question": "What did you learn from this video?",
+            "options": {
+                "A": "Concept A",
+                "B": "Concept B",
+                "C": "Concept C",
+                "D": "All of the above"
+            },
+            "correct_answer": "D",
+            "explanation": "The video covered all these concepts"
+        })
+        
+        return question_data
+        
+    except Exception as e:
+        logger.error(f"Comprehension check error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============== MOLTBOT MULTI-AGENT SYSTEM ==============
+
+class MoltbotChatRequest(BaseModel):
+    message: str
+    agent_mode: str = "general"  # general, research, coding, creative, learning, business
+    conversation_history: List[Dict[str, str]] = []
+    session_id: str
+    thinking_mode: str = "normal"  # normal, extended, senior_engineer
+    skill_level: str = "intermediate"
+
+@api_router.post("/moltbot/chat")
+async def moltbot_chat(request: MoltbotChatRequest):
+    """
+    Moltbot-style multi-agent chat with senior engineer thinking
+    Supports multiple specialized agent modes with deep reasoning
+    """
+    try:
+        skill_context = get_skill_context(request.skill_level)
+        
+        # Agent mode configurations
+        agent_configs = {
+            "general": {
+                "role": "General AI Assistant",
+                "capabilities": "Versatile help with any task",
+                "tone": "Helpful and knowledgeable"
+            },
+            "research": {
+                "role": "Deep Research Specialist",
+                "capabilities": "Web search, analysis, citations",
+                "tone": "Analytical and thorough"
+            },
+            "coding": {
+                "role": "Senior Software Engineer",
+                "capabilities": "Code review, debugging, architecture",
+                "tone": "Technical and precise"
+            },
+            "creative": {
+                "role": "Creative Writer",
+                "capabilities": "Content creation, copywriting, storytelling",
+                "tone": "Creative and engaging"
+            },
+            "learning": {
+                "role": "Learning Tutor",
+                "capabilities": "Teaching, explanations, learning paths",
+                "tone": "Patient and pedagogical"
+            },
+            "business": {
+                "role": "Business Intelligence Analyst",
+                "capabilities": "Market research, company analysis, strategy",
+                "tone": "Strategic and data-driven"
+            }
+        }
+        
+        agent_config = agent_configs.get(request.agent_mode, agent_configs["general"])
+        
+        # Senior engineer thinking system
+        thinking_prompts = {
+            "normal": "",
+            "extended": """
+            
+EXTENDED THINKING MODE:
+Before answering, think through:
+1. What is the user really asking?
+2. What context am I missing?
+3. What are the edge cases?
+4. What's the best solution?
+
+Show your reasoning briefly.""",
+            "senior_engineer": """
+
+SENIOR ENGINEER MODE:
+Approach this like a senior engineer:
+1. **Architecture First** - Think about system design
+2. **Trade-offs** - What are we optimizing for?
+3. **Production Grade** - Scalability, maintainability, security
+4. **Long-term Impact** - How will this decision affect the system?
+
+Provide:
+- Your reasoning process (2-3 key thoughts)
+- The solution with context
+- Trade-offs considered
+- Production recommendations"""
+        }
+        
+        system_prompt = f"""You are **{agent_config['role']}** in the Moltbot multi-agent system.
+
+**ROLE**: {agent_config['capabilities']}
+**TONE**: {agent_config['tone']}
+
+{skill_context}
+
+{thinking_prompts.get(request.thinking_mode, '')}
+
+**RESPONSE FORMAT**:
+Use clean Markdown formatting:
+- # Headings for main sections
+- **Bold** for emphasis
+- `code` for technical terms
+- > blockquotes for important notes
+- bullet points for lists
+- numbered lists for steps
+- tables for comparisons
+
+Keep responses:
+- Structured and scannable
+- Action-oriented
+- Professional but approachable
+
+Remember: You're part of a multi-agent system. Stay in your role."""
+        
+        chat = get_chat_instance(system_prompt)
+        
+        # Build context with conversation history
+        context_parts = []
+        
+        if request.conversation_history:
+            context_parts.append("**Previous Context**:")
+            for msg in request.conversation_history[-5:]:  # Last 5 messages
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                context_parts.append(f"- {role}: {content[:100]}...")
+            context_parts.append("")
+        
+        context_parts.append(f"**Current Message**: {request.message}")
+        
+        user_msg = UserMessage(text="\n".join(context_parts))
+        response = await chat.send_message(user_msg)
+        
+        return {
+            "response": response,
+            "agent_mode": request.agent_mode,
+            "agent_config": agent_config,
+            "thinking_mode": request.thinking_mode,
+            "session_id": request.session_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Moltbot chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class MoltbotStatusRequest(BaseModel):
+    session_id: Optional[str] = None
+
+@api_router.get("/moltbot/status")
+async def moltbot_status(session_id: Optional[str] = None):
+    """Get Moltbot gateway status (like real Moltbot health check)"""
+    return {
+        "gateway": "online",
+        "version": "2026.1.27",
+        "features": {
+            "multi_agent": True,
+            "senior_thinking": True,
+            "video_mentoring": True,
+            "real_time_help": True,
+            "transcript_analysis": TRANSCRIPT_API_AVAILABLE
+        },
+        "agents": [
+            {"id": "general", "status": "ready"},
+            {"id": "research", "status": "ready"},
+            {"id": "coding", "status": "ready"},
+            {"id": "creative", "status": "ready"},
+            {"id": "learning", "status": "ready"},
+            {"id": "business", "status": "ready"}
+        ],
+        "session_id": session_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
 # Include the router
 app.include_router(api_router)
 
