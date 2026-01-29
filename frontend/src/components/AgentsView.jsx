@@ -1041,7 +1041,6 @@ const SpecialResultCard = ({ result, onDownload }) => {
     const { data } = result;
     const sheets = data.sheets || {};
     const isDeepResearch = result.type === "business_deep";
-    const [showHtmlReport, setShowHtmlReport] = useState(false);
     
     // Function to open HTML report in new window
     const openHtmlReportViewer = () => {
