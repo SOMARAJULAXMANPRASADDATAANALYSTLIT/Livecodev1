@@ -4569,6 +4569,13 @@ async def update_config(updates: Dict[str, Any]):
     """Update API configuration"""
     try:
         config = config_manager.update_config(updates)
+        
+        # Reload Emergent client if key was updated
+        if 'emergent_llm_key' in updates:
+            from emergent_llm import reload_emergent_client
+            reload_emergent_client()
+            logger.info("Emergent LLM client reloaded")
+        
         return {"success": True, "config": config.dict()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -4649,6 +4656,61 @@ async def whatsapp_stop():
     return result
 
 app.include_router(whatsapp_router)
+
+# ============== AI CHAT WITH EMERGENT LLM ==============
+
+from emergent_llm import emergent_llm_client
+
+ai_router = APIRouter(prefix="/api/ai", tags=["AI Chat"])
+
+class AIChatRequest(BaseModel):
+    message: str
+    model: str = "gemini-2.0-flash-exp"
+    conversation_history: List[Dict[str, str]] = []
+    temperature: float = 0.7
+    max_tokens: int = 4000
+
+@ai_router.post("/chat")
+async def ai_chat(request: AIChatRequest):
+    """
+    AI Chat using Emergent LLM key
+    Supports: GPT-4o, Claude Opus 4.5, Gemini 2.0 Flash
+    """
+    try:
+        if not emergent_llm_client.is_configured():
+            return {
+                "error": "Emergent LLM key not configured",
+                "hint": "Add your Emergent LLM key in Configuration tab"
+            }
+        
+        # Build messages
+        messages = request.conversation_history + [
+            {"role": "user", "content": request.message}
+        ]
+        
+        # Get completion
+        response = await emergent_llm_client.chat_completion(
+            model=request.model,
+            messages=messages,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens
+        )
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"AI chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@ai_router.get("/models")
+async def get_available_models():
+    """Get list of available AI models"""
+    if not emergent_llm_client.is_configured():
+        return {"error": "Emergent LLM key not configured"}
+    
+    return emergent_llm_client.get_available_models()
+
+app.include_router(ai_router)
 
 # CORS middleware
 app.add_middleware(
