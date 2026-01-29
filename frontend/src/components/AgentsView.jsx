@@ -1040,6 +1040,48 @@ const SpecialResultCard = ({ result, onDownload }) => {
     const { data } = result;
     const sheets = data.sheets || {};
     const isDeepResearch = result.type === "business_deep";
+    const [showHtmlReport, setShowHtmlReport] = useState(false);
+    
+    // Function to open HTML report in new window
+    const openHtmlReportViewer = () => {
+      if (data.html_report) {
+        const newWindow = window.open('', '_blank', 'width=1200,height=800');
+        if (newWindow) {
+          newWindow.document.write(data.html_report);
+          newWindow.document.close();
+        }
+      }
+    };
+    
+    // Function to download Excel data as CSV
+    const downloadExcelData = () => {
+      if (!sheets || Object.keys(sheets).length === 0) {
+        toast.error("No data to download");
+        return;
+      }
+      
+      let csvContent = "";
+      Object.entries(sheets).forEach(([sheetName, rows]) => {
+        csvContent += `\n=== ${sheetName} ===\n`;
+        if (Array.isArray(rows) && rows.length > 0) {
+          // Add headers
+          csvContent += Object.keys(rows[0]).join(",") + "\n";
+          // Add data rows
+          rows.forEach(row => {
+            csvContent += Object.values(row).map(v => `"${String(v).replace(/"/g, '""')}"`).join(",") + "\n";
+          });
+        }
+      });
+      
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${data.company_name || 'report'}_data.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Excel data downloaded!");
+    };
     
     return (
       <div className="glass-light rounded-2xl p-6 border border-[#FBBC04]/30">
@@ -1052,36 +1094,49 @@ const SpecialResultCard = ({ result, onDownload }) => {
             <div>
               <h3 className="font-bold text-xl">{data.company_name}</h3>
               <p className="text-sm text-white/60">
-                {isDeepResearch ? "🔬 Deep Research Report - 8 Sheets" : "Business Intelligence Report"}
+                {isDeepResearch ? "🔬 Deep Research Report - Multi-Page Analysis" : "Business Intelligence Report"}
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap justify-end">
             {data.html_report && (
-              <Button 
-                onClick={() => {
-                  const blob = new Blob([data.html_report], { type: 'text/html' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `${data.company_name}_report.html`;
-                  a.click();
-                }}
-                size="sm" 
-                className="bg-[#FBBC04] text-black hover:bg-[#FBBC04]/80 gap-2"
-              >
-                <FileText className="w-4 h-4" />
-                HTML Report
-              </Button>
+              <>
+                <Button 
+                  onClick={openHtmlReportViewer}
+                  size="sm" 
+                  className="bg-[#667eea] text-white hover:bg-[#667eea]/80 gap-2"
+                >
+                  <Globe className="w-4 h-4" />
+                  View Report
+                </Button>
+                <Button 
+                  onClick={() => {
+                    const blob = new Blob([data.html_report], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${data.company_name || 'report'}_report.html`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success("HTML Report downloaded!");
+                  }}
+                  size="sm" 
+                  variant="outline"
+                  className="border-[#FBBC04] text-[#FBBC04] hover:bg-[#FBBC04]/10 gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  Download HTML
+                </Button>
+              </>
             )}
             <Button 
-              onClick={onDownload} 
+              onClick={downloadExcelData} 
               size="sm" 
               variant="outline"
               className="border-[#34A853] text-[#34A853] hover:bg-[#34A853]/10 gap-2"
             >
               <Download className="w-4 h-4" />
-              Excel Data
+              Download CSV
             </Button>
           </div>
         </div>
@@ -1099,8 +1154,39 @@ const SpecialResultCard = ({ result, onDownload }) => {
           </div>
         )}
         
+        {/* Inline HTML Report Preview */}
+        {data.html_report && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-semibold text-white/70 flex items-center gap-2">
+                <Globe className="w-4 h-4 text-[#667eea]" />
+                Report Preview
+              </h4>
+              <Button
+                onClick={() => setShowHtmlReport(!showHtmlReport)}
+                variant="ghost"
+                size="sm"
+                className="text-xs"
+              >
+                {showHtmlReport ? "Hide Preview" : "Show Preview"}
+              </Button>
+            </div>
+            {showHtmlReport && (
+              <div className="border border-white/10 rounded-xl overflow-hidden bg-white">
+                <iframe
+                  srcDoc={data.html_report}
+                  className="w-full h-[400px] border-0"
+                  title="Business Report Preview"
+                  sandbox="allow-same-origin"
+                />
+              </div>
+            )}
+          </div>
+        )}
+        
         {/* Report Sheets - Expandable */}
         <div className="space-y-2">
+          <h4 className="text-sm font-semibold text-white/70 mb-2">📊 Data Sheets</h4>
           {Object.keys(sheets).length === 0 ? (
             <div className="text-center py-8 text-white/40">
               No sheet data available
