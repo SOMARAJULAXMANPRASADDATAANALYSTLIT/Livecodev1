@@ -456,10 +456,13 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Visual Generation for Agents API"
-    - "News Feed API" 
-    - "Company Analysis (Business Agent) API"
-    - "Project Upload and Analysis APIs"
+    - "YouTube Video Transcript Fetching API"
+    - "Contextual Video Help API"
+    - "Proactive Video Analysis API"
+    - "Video Comprehension Check API"
+    - "Moltbot Multi-Agent Chat API"
+    - "Enhanced Video Learning Modal with AI Mentoring"
+    - "Moltbot Multi-Agent Chat Interface"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
