@@ -557,20 +557,122 @@ Let's learn together! 🚀`
         <div className="flex-1 flex overflow-hidden">
           {/* Video Player */}
           <div className="flex-1 flex flex-col bg-black/40 p-4">
-            <div className="flex-1 rounded-xl overflow-hidden border border-white/20">
+            <div className="flex-1 rounded-xl overflow-hidden border border-white/20 relative">
               {videoId ? (
-                <iframe
-                  ref={iframeRef}
-                  className="w-full h-full"
-                  src={`https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&rel=0`}
-                  title={videoTitle}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+                <>
+                  <iframe
+                    ref={iframeRef}
+                    className="w-full h-full"
+                    src={`https://www.youtube-nocookie.com/embed/${videoId}?enablejsapi=1&rel=0`}
+                    title={videoTitle}
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    onError={() => setShowAddUrl(true)}
+                  />
+                  {/* Video unavailable overlay */}
+                  {showAddUrl && (
+                    <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-6">
+                      <AlertCircle className="w-16 h-16 text-[#EA4335] mb-4" />
+                      <h3 className="text-xl font-bold mb-2">Video Unavailable</h3>
+                      <p className="text-white/60 text-sm mb-6 text-center">
+                        This video is not available. You can add a different video URL below.
+                      </p>
+                      
+                      {/* Add URL Form */}
+                      <div className="w-full max-w-md space-y-4">
+                        <div className="relative">
+                          <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#EA4335]" />
+                          <Input
+                            value={newVideoUrl}
+                            onChange={(e) => setNewVideoUrl(e.target.value)}
+                            placeholder="Paste YouTube URL here..."
+                            className="pl-11 bg-white/5 border-white/20"
+                          />
+                        </div>
+                        
+                        {/* URL Preview */}
+                        {urlPreview && (
+                          <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                            <div className="flex gap-3">
+                              <img
+                                src={urlPreview.thumbnail_url}
+                                alt=""
+                                className="w-24 h-16 rounded object-cover"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm truncate">
+                                  {urlPreview.title}
+                                </div>
+                                <div className="text-xs text-white/50 mt-1">
+                                  {urlPreview.author_name}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        <Button
+                          onClick={handleReplaceVideo}
+                          disabled={!urlPreview}
+                          className="w-full bg-[#EA4335] hover:bg-[#EA4335]/80"
+                        >
+                          <Play className="w-4 h-4 mr-2" />
+                          Load This Video
+                        </Button>
+                        
+                        <button
+                          onClick={() => setShowAddUrl(false)}
+                          className="w-full text-sm text-white/50 hover:text-white"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
-                <div className="flex items-center justify-center h-full text-white/50">
-                  Invalid video URL
+                <div className="flex flex-col items-center justify-center h-full text-white/50 p-6">
+                  <AlertCircle className="w-12 h-12 mb-4 text-[#EA4335]" />
+                  <p className="mb-4">No video URL provided</p>
+                  
+                  {/* Add URL when no video */}
+                  <div className="w-full max-w-md space-y-3">
+                    <div className="relative">
+                      <Youtube className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#EA4335]" />
+                      <Input
+                        value={newVideoUrl}
+                        onChange={(e) => setNewVideoUrl(e.target.value)}
+                        placeholder="Paste YouTube URL here..."
+                        className="pl-11 bg-white/5 border-white/20"
+                      />
+                    </div>
+                    
+                    {urlPreview && (
+                      <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                        <div className="flex gap-3">
+                          <img
+                            src={urlPreview.thumbnail_url}
+                            alt=""
+                            className="w-20 h-12 rounded object-cover"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm truncate">{urlPreview.title}</div>
+                            <div className="text-xs text-white/50">{urlPreview.author_name}</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <Button
+                      onClick={handleReplaceVideo}
+                      disabled={!urlPreview}
+                      className="w-full bg-[#EA4335] hover:bg-[#EA4335]/80"
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Load Video
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
