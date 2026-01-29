@@ -230,8 +230,49 @@ const EditableLearningPath = ({ skillTree, userProfile, onUpdateTree }) => {
       setCurrentVideo({
         url: node.youtube_url || `https://www.youtube.com/watch?v=${node.video_id}`,
         title: node.video_title || node.name,
+        topicId: node.id
       });
       setShowVideoModal(true);
+    }
+  };
+
+  // Open chat without video (for topics without URL)
+  const handleOpenChat = (node) => {
+    setCurrentVideo({
+      url: null,
+      title: node.name,
+      topicId: node.id,
+      topicOnly: true  // Flag to indicate no video, just chat about topic
+    });
+    setShowVideoModal(true);
+  };
+
+  // Update video URL for a topic (callback from VideoLearningModal)
+  const handleUpdateVideoUrl = (topicId, videoData) => {
+    const updatedNodes = [...(skillTree?.nodes || [])];
+    
+    const updateTopic = (nodes, topicId, updates) => {
+      for (let node of nodes) {
+        if (node.id === topicId) {
+          Object.assign(node, {
+            youtube_url: videoData.url,
+            video_id: videoData.video_id,
+            video_title: videoData.title,
+            thumbnail_url: `https://img.youtube.com/vi/${videoData.video_id}/hqdefault.jpg`
+          });
+          return true;
+        }
+        if (node.children && updateTopic(node.children, topicId, updates)) {
+          return true;
+        }
+      }
+      return false;
+    };
+    
+    updateTopic(updatedNodes, currentVideo?.topicId);
+    
+    if (onUpdateTree) {
+      onUpdateTree({ ...skillTree, nodes: updatedNodes });
     }
   };
 
