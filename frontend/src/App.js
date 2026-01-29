@@ -9,6 +9,7 @@ import AgentsView from "./components/AgentsView";
 import LearningPathView from "./components/LearningPathView";
 import AINewsFeed from "./components/AINewsFeed";
 import MoltbotView from "./components/MoltbotView";
+import MoltbotFullView from "./components/MoltbotFullView";
 import { MentorProvider } from "./contexts/MentorContext";
 
 function App() {
@@ -37,6 +38,8 @@ function App() {
               <div className="max-w-5xl mx-auto">
                 <MoltbotView />
               </div>
+            ) : mode === "moltbot-full" ? (
+              <MoltbotFullView />
             ) : (
               <EnglishChatView />
             )}
