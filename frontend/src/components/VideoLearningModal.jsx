@@ -41,6 +41,7 @@ const VideoLearningModal = ({ videoUrl, videoTitle, onClose, skillLevel = "inter
 
   // Extract YouTube video ID
   const getVideoId = (url) => {
+    if (!url) return null;
     const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
     return match ? match[1] : null;
   };
