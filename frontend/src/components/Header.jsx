@@ -24,13 +24,13 @@ const Header = ({ mode, onModeChange }) => {
         {/* Mode Switcher */}
         <div 
           data-testid="mode-switcher"
-          className="flex items-center gap-1 p-1 rounded-full glass-light"
+          className="flex items-center gap-1 p-1 rounded-full glass-light overflow-x-auto max-w-[60%] md:max-w-none"
         >
           <button
             data-testid="mode-learning-btn"
             onClick={() => onModeChange("learning")}
             className={`
-              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap
               ${mode === "learning" 
                 ? "mode-active text-white" 
                 : "text-white/60 hover:text-white hover:bg-white/5"
@@ -44,7 +44,7 @@ const Header = ({ mode, onModeChange }) => {
             data-testid="mode-agents-btn"
             onClick={() => onModeChange("agents")}
             className={`
-              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap
               ${mode === "agents" 
                 ? "mode-active text-white" 
                 : "text-white/60 hover:text-white hover:bg-white/5"
@@ -55,10 +55,24 @@ const Header = ({ mode, onModeChange }) => {
             <span className="hidden md:inline">Agents</span>
           </button>
           <button
+            data-testid="mode-moltbot-btn"
+            onClick={() => onModeChange("moltbot")}
+            className={`
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap
+              ${mode === "moltbot" 
+                ? "mode-active text-white bg-gradient-to-r from-[#E74C3C]/20 to-[#C0392B]/20" 
+                : "text-white/60 hover:text-white hover:bg-white/5"
+              }
+            `}
+          >
+            <span className="text-base">🦞</span>
+            <span className="hidden md:inline">Moltbot</span>
+          </button>
+          <button
             data-testid="mode-news-btn"
             onClick={() => onModeChange("news")}
             className={`
-              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap
               ${mode === "news" 
                 ? "mode-active text-white" 
                 : "text-white/60 hover:text-white hover:bg-white/5"
@@ -72,7 +86,7 @@ const Header = ({ mode, onModeChange }) => {
             data-testid="mode-ide-btn"
             onClick={() => onModeChange("ide")}
             className={`
-              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap
               ${mode === "ide" 
                 ? "mode-active text-white" 
                 : "text-white/60 hover:text-white hover:bg-white/5"
@@ -86,7 +100,7 @@ const Header = ({ mode, onModeChange }) => {
             data-testid="mode-code-btn"
             onClick={() => onModeChange("code")}
             className={`
-              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap
               ${mode === "code" 
                 ? "mode-active text-white" 
                 : "text-white/60 hover:text-white hover:bg-white/5"
@@ -100,7 +114,7 @@ const Header = ({ mode, onModeChange }) => {
             data-testid="mode-english-btn"
             onClick={() => onModeChange("english")}
             className={`
-              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300
+              flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium transition-all duration-300 whitespace-nowrap
               ${mode === "english" 
                 ? "mode-active text-white" 
                 : "text-white/60 hover:text-white hover:bg-white/5"
