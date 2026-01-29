@@ -123,6 +123,155 @@ Let's learn together! 🚀`
     }
   };
 
+  // Fetch YouTube video preview
+  const fetchUrlPreview = async (url) => {
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    const extractedVideoId = match ? match[1] : null;
+    
+    if (!extractedVideoId) {
+      setUrlPreview(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/learning/youtube/preview/${extractedVideoId}`);
+      const data = await response.json();
+      if (data.success) {
+        setUrlPreview(data);
+      }
+    } catch (error) {
+      console.error("Preview fetch error:", error);
+    }
+  };
+
+  // Debounce URL preview
+  useEffect(() => {
+    if (!newVideoUrl) {
+      setUrlPreview(null);
+      return;
+    }
+    const timer = setTimeout(() => fetchUrlPreview(newVideoUrl), 500);
+    return () => clearTimeout(timer);
+  }, [newVideoUrl]);
+
+  // Handle replacing video URL
+  const handleReplaceVideo = () => {
+    if (!urlPreview || !onUpdateVideoUrl) return;
+    
+    onUpdateVideoUrl({
+      url: `https://www.youtube.com/watch?v=${urlPreview.video_id}`,
+      title: urlPreview.title,
+      video_id: urlPreview.video_id
+    });
+    
+    setShowAddUrl(false);
+    setNewVideoUrl("");
+    setUrlPreview(null);
+    toast.success("Video updated! Refreshing...");
+    
+    // Reload the page to load new video
+    window.location.reload();
+  };
+
+  // Handle image drop for screenshot analysis
+  const handleDrop = useCallback(async (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    
+    const file = files[0];
+    if (!file.type.startsWith('image/')) {
+      toast.error("Please drop an image file");
+      return;
+    }
+    
+    await processImage(file);
+  }, []);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    setDragOver(false);
+  }, []);
+
+  // Process uploaded/dropped image
+  const processImage = async (file) => {
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+      const base64 = e.target.result;
+      setUploadedImage({
+        preview: base64,
+        file: file
+      });
+      
+      // Add user message with image
+      setMessages(prev => [...prev, {
+        role: "user",
+        content: "📸 [Screenshot uploaded]",
+        image: base64
+      }]);
+      
+      // Send to AI for analysis
+      setIsLoading(true);
+      
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/learning/video/analyze-screenshot`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_base64: base64.split(',')[1], // Remove data:image/... prefix
+            video_title: videoTitle,
+            current_time: currentTime,
+            skill_level: skillLevel,
+            transcript_context: transcriptSegments
+              .filter(seg => seg.start <= currentTime && seg.start >= currentTime - 60)
+              .map(seg => seg.text)
+              .join(' '),
+            conversation_history: conversationContext.slice(-5)
+          })
+        });
+        
+        const data = await response.json();
+        
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: data.analysis || "I analyzed the screenshot. What would you like to know about it?"
+        }]);
+        
+        // Update conversation context
+        setConversationContext(prev => [...prev, {
+          type: "screenshot_analysis",
+          timestamp: currentTime,
+          summary: data.analysis?.slice(0, 200)
+        }]);
+        
+      } catch (error) {
+        console.error("Screenshot analysis error:", error);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "I can see you've shared a screenshot. Could you tell me what you'd like to understand about what's shown on screen?"
+        }]);
+      } finally {
+        setIsLoading(false);
+        setUploadedImage(null);
+      }
+    };
+    
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) processImage(file);
+  };
+
   // Track video progress and provide proactive help
   const checkForProactiveHelp = useCallback(async () => {
     if (!aiWatching || isLoading || !videoId) return;
