@@ -376,6 +376,30 @@ frontend:
         agent: "main"
         comment: "Created line selection help feature with contextual explanations"
 
+  - task: "Enhanced Video Learning Modal with AI Mentoring"
+    implemented: true
+    working: NA
+    file: "VideoLearningModal.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: NA
+        agent: "main"
+        comment: "MAJOR ENHANCEMENT: 1) Added YouTube transcript fetching and display. 2) Implemented AI Watching Mode with live indicator. 3) Added 4 quick action buttons (Explain/Example/Deeper/Quiz). 4) Proactive help banner with severity levels. 5) Comprehension check overlay with multiple choice questions. 6) Real-time video progress tracking. 7) Timestamp-aware Q&A. 8) Transcript-based contextual help. Videos play embedded (never leave app)."
+
+  - task: "Moltbot Multi-Agent Chat Interface"
+    implemented: true
+    working: NA
+    file: "MoltbotView.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: NA
+        agent: "main"
+        comment: "INTEGRATION: Updated to use new /api/moltbot/chat endpoint. Added senior engineer thinking mode selection. Maintains 6 agent modes (general, research, coding, creative, learning, business). Session management working. Command system (/help, /status, /mode, etc.) functional."
+
   - task: "Project Upload Modal"
     implemented: true
     working: NA
