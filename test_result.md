@@ -135,6 +135,81 @@ backend:
         agent: "testing"
         comment: "✅ PASSED - Tested line-level mentoring across all skill levels. API provides contextual explanations, identifies 2-3 potential issues, offers improvement suggestions, and includes teaching points. Skill-level adaptation working correctly."
 
+  - task: "YouTube Video Transcript Fetching API"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: NA
+        agent: "main"
+        comment: "Created POST /api/learning/video/transcript endpoint. Fetches YouTube transcripts with timestamps using youtube-transcript-api. Returns formatted segments and full text. Supports language selection (default: en)."
+
+  - task: "Contextual Video Help API"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: NA
+        agent: "main"
+        comment: "Created POST /api/learning/video/contextual-help endpoint. Provides proactive AI help based on video position and transcript segment. Supports 4 help types: explain, clarify, example, deeper. Skill-level adapted responses."
+
+  - task: "Proactive Video Analysis API"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: NA
+        agent: "main"
+        comment: "Created POST /api/learning/video/proactive-analysis endpoint. AI monitors student's watching patterns (rewinds, pauses). Detects confusion signals and decides whether to intervene. Returns should_intervene, reason, proactive_message, severity."
+
+  - task: "Video Comprehension Check API"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: NA
+        agent: "main"
+        comment: "Created POST /api/learning/video/comprehension-check endpoint. Generates multiple-choice questions to test understanding. Returns question, 4 options (A/B/C/D), correct answer, and explanation. Skill-level adapted."
+
+  - task: "Moltbot Multi-Agent Chat API"
+    implemented: true
+    working: NA
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: NA
+        agent: "main"
+        comment: "Created POST /api/moltbot/chat endpoint. Multi-agent system with 6 specialized agents (general, research, coding, creative, learning, business). Supports 3 thinking modes: normal, extended, senior_engineer. Session-based conversation history."
+
+  - task: "Moltbot Status/Health API"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: NA
+        agent: "main"
+        comment: "Created GET /api/moltbot/status endpoint. Returns gateway status, version, feature flags, agent availability, and timestamp. Moltbot-style health check."
+      - working: true
+        agent: "main"
+        comment: "✅ VERIFIED - Manual curl test successful. Returns proper JSON with gateway: online, 6 agents (all ready), feature flags (multi_agent, senior_thinking, video_mentoring, real_time_help, transcript_analysis all true), version 2026.1.27."
+
   - task: "Session Memory APIs"
     implemented: true
     working: NA
